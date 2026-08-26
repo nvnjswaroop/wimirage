@@ -1,4 +1,4 @@
-from core.models import AppConfig, AccessPoint, Credential, AttackState
+from core.models import AccessPoint, AppConfig, AttackState, Credential
 
 
 class TestAttackState:

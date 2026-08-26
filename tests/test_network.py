@@ -11,16 +11,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from core.network import (
+    FILTER_TABLE_TEMPLATE,
+    NAT_TABLE_TEMPLATE,
     NetworkConfig,
     flush_iptables,
-    NAT_TABLE_TEMPLATE,
-    FILTER_TABLE_TEMPLATE,
 )
-
 
 # ---------------------------------------------------------------------------
 # Section 7 #9 — grant_internet assertions
 # ---------------------------------------------------------------------------
+
 
 class TestGrantInternet:
     """Section 7 #9: assert the right iptables -I command is built."""
@@ -37,9 +37,22 @@ class TestGrantInternet:
 
         assert result is True
         mock_run.assert_called_once_with(
-            ["iptables", "-t", "nat", "-I", "PREROUTING", "1",
-             "-s", "10.0.0.25",
-             "-p", "tcp", "--dport", "80", "-j", "ACCEPT"],
+            [
+                "iptables",
+                "-t",
+                "nat",
+                "-I",
+                "PREROUTING",
+                "1",
+                "-s",
+                "10.0.0.25",
+                "-p",
+                "tcp",
+                "--dport",
+                "80",
+                "-j",
+                "ACCEPT",
+            ],
             check=False,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -88,6 +101,7 @@ class TestGrantInternet:
 # flush_iptables
 # ---------------------------------------------------------------------------
 
+
 class TestFlushIptables:
     @patch("subprocess.run")
     def test_flush_runs_four_iptables_commands(self, mock_run):
@@ -134,6 +148,7 @@ class TestFlushIptables:
 # NetworkConfig — ip_forward toggle + constructor invariants
 # ---------------------------------------------------------------------------
 
+
 class TestNetworkConfigInit:
     def test_default_port_and_gateway(self):
         nc = NetworkConfig("eth0", "wlan0")
@@ -164,7 +179,7 @@ class TestEnableIpForwarding:
         nc = NetworkConfig("eth0", "wlan0")
         assert nc.enable_ip_forwarding() is False
 
-    @patch("builtins.open", side_effect=IOError("disk gone"))
+    @patch("builtins.open", side_effect=OSError("disk gone"))
     def test_io_error_returns_false(self, _):
         nc = NetworkConfig("eth0", "wlan0")
         assert nc.enable_ip_forwarding() is False
@@ -183,6 +198,7 @@ class TestDisableIpForwarding:
 # ---------------------------------------------------------------------------
 # setup_iptables — iptables-restore succeeds / falls back
 # ---------------------------------------------------------------------------
+
 
 class TestSetupIptables:
     @patch("core.network.restore_iptables", create=True)
@@ -207,12 +223,15 @@ class TestSetupIptables:
                 break
         assert restore_call is not None
         assert restore_call.args[0][1] == "/tmp/rules.123"
+
     @patch("core.network.restore_iptables", create=True)
     @patch("core.network.backup_iptables", create=True)
     @patch("subprocess.run")
     @patch("tempfile.NamedTemporaryFile")
     @patch("os.unlink")
-    def test_restore_failure_returns_false(self, mock_unlink, mock_temp, mock_run, _mock_backup, _mock_restore):
+    def test_restore_failure_returns_false(
+        self, mock_unlink, mock_temp, mock_run, _mock_backup, _mock_restore
+    ):
         mock_file = MagicMock()
         mock_file.name = "/tmp/rules.123"
         mock_temp.return_value.__enter__.return_value = mock_file
@@ -226,7 +245,9 @@ class TestSetupIptables:
     @patch("subprocess.run")
     @patch("tempfile.NamedTemporaryFile")
     @patch("os.unlink")
-    def test_restore_falls_back_to_individual_rules(self, mock_unlink, mock_temp, mock_run, _mock_backup, _mock_restore):
+    def test_restore_falls_back_to_individual_rules(
+        self, mock_unlink, mock_temp, mock_run, _mock_backup, _mock_restore
+    ):
         # First subprocess.run is iptables-restore inside setup_iptables.
         # Raise FileNotFoundError to trigger the fallback branch.
         mock_file = MagicMock()
@@ -242,8 +263,7 @@ class TestSetupIptables:
             with patch("core.network.subprocess.run") as fallback_run:
                 fallback_run.return_value = MagicMock(returncode=0)
                 # also avoid writing to /proc/sys/net/ipv4/ip_forward
-                with patch.object(NetworkConfig, "enable_ip_forwarding",
-                                  return_value=True):
+                with patch.object(NetworkConfig, "enable_ip_forwarding", return_value=True):
                     assert nc.setup_iptables() is True
 
 
@@ -253,8 +273,10 @@ class TestCleanup:
         nc._granted_ips.add("10.0.0.25")
         nc._granted_ips.add("10.0.0.26")
 
-        with patch("core.network.flush_iptables"), \
-             patch.object(NetworkConfig, "disable_ip_forwarding"):
+        with (
+            patch("core.network.flush_iptables"),
+            patch.object(NetworkConfig, "disable_ip_forwarding"),
+        ):
             nc.cleanup()
 
         assert nc._granted_ips == set()
@@ -264,16 +286,23 @@ class TestCleanup:
 # Section 7 #6 template sanity (Section 6 #10)
 # ---------------------------------------------------------------------------
 
+
 class TestTemplates:
     """The templates are constants — but the format placeholders matter."""
 
     def test_nat_template_placeholders(self):
-        for token in ("{ap_interface}", "{internet_interface}", "{gateway}",
-                      "{portal_port}", "PREROUTING", "MASQUERADE", "COMMIT",
-                      "DNAT"):
+        for token in (
+            "{ap_interface}",
+            "{internet_interface}",
+            "{gateway}",
+            "{portal_port}",
+            "PREROUTING",
+            "MASQUERADE",
+            "COMMIT",
+            "DNAT",
+        ):
             assert token in NAT_TABLE_TEMPLATE, f"NAT_TEMPLATE missing {token}"
 
     def test_filter_template_placeholders(self):
-        for token in ("{ap_interface}", "{internet_interface}",
-                      "RELATED,ESTABLISHED", "COMMIT"):
+        for token in ("{ap_interface}", "{internet_interface}", "RELATED,ESTABLISHED", "COMMIT"):
             assert token in FILTER_TABLE_TEMPLATE, f"FILTER_TEMPLATE missing {token}"

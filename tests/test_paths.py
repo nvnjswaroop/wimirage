@@ -9,18 +9,18 @@ point at real on-disk locations.
 import os
 
 from core.paths import (
-    PROJECT_ROOT,
-    CORE_DIR,
-    PORTAL_TEMPLATES_DIR,
-    PORTAL_STATIC_DIR,
     CONFIG_DIR,
-    LOGS_DIR,
+    CORE_DIR,
+    DEFAULT_LOG_FILE,
+    DNSMASQ_PID_PATH,
     DOCS_DIR,
     HOSTAPD_PID_PATH,
-    DNSMASQ_PID_PATH,
-    DEFAULT_LOG_FILE,
-    ensure_logs_dir,
+    LOGS_DIR,
+    PORTAL_STATIC_DIR,
+    PORTAL_TEMPLATES_DIR,
+    PROJECT_ROOT,
     ensure_config_dir,
+    ensure_logs_dir,
 )
 
 

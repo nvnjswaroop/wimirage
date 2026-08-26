@@ -7,8 +7,9 @@ remaining handlers still run (Section 2 #8).
 
 import logging
 import threading
-from typing import Callable, Any
 from collections import defaultdict
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger("wimirage")
 
@@ -31,9 +32,7 @@ class EventBus:
         """Unsubscribe ``callback`` from ``event``. No-op if not subscribed."""
         with self._lock:
             if event in self._listeners:
-                self._listeners[event] = [
-                    cb for cb in self._listeners[event] if cb != callback
-                ]
+                self._listeners[event] = [cb for cb in self._listeners[event] if cb != callback]
 
     def emit(self, event: str, *args: Any, **kwargs: Any) -> None:
         """Fire ``event`` to all subscribers; isolate each handler's exceptions.

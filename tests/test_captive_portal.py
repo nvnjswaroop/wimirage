@@ -1,4 +1,4 @@
-from core.captive_portal import CaptivePortal, validate_phone, validate_email, rate_limit
+from core.captive_portal import CaptivePortal, rate_limit, validate_email, validate_phone
 from core.models import AppConfig
 from core.otp_service import DemoOTPService
 
@@ -35,6 +35,7 @@ class TestRateLimitDecorator:
             return "ok", 200
 
         from flask import Flask
+
         app = Flask(__name__)
         with app.test_request_context():
             for _ in range(3):
@@ -47,6 +48,7 @@ class TestRateLimitDecorator:
             return "ok", 200
 
         from flask import Flask
+
         app = Flask(__name__)
         with app.test_request_context():
             dummy_view()
@@ -75,7 +77,7 @@ class TestCaptivePortalRoutes:
         portal = CaptivePortal(config=config)
         with portal.app.test_client() as client:
             response = client.get("/")
-            assert b'csrf_token' in response.data
+            assert b"csrf_token" in response.data
 
     def test_submit_without_csrf_returns_403(self):
         config = AppConfig()
@@ -83,12 +85,15 @@ class TestCaptivePortalRoutes:
         config.secret_key = "test-secret-key"
         portal = CaptivePortal(config=config)
         with portal.app.test_client() as client:
-            response = client.post("/submit", data={
-                "phone": "9876543210",
-                "email": "test@example.com",
-                "country_code": "+91",
-                "csrf_token": "invalid_token"
-            })
+            response = client.post(
+                "/submit",
+                data={
+                    "phone": "9876543210",
+                    "email": "test@example.com",
+                    "country_code": "+91",
+                    "csrf_token": "invalid_token",
+                },
+            )
             assert response.status_code == 403
 
     def test_submit_invalid_country_code(self):
@@ -98,12 +103,16 @@ class TestCaptivePortalRoutes:
         portal = CaptivePortal(config=config)
         with portal.app.test_client() as client:
             client.get("/")
-            response = client.post("/submit", data={
-                "phone": "9876543210",
-                "email": "test@example.com",
-                "country_code": "+999",
-                "csrf_token": ""
-            }, follow_redirects=False)
+            response = client.post(
+                "/submit",
+                data={
+                    "phone": "9876543210",
+                    "email": "test@example.com",
+                    "country_code": "+999",
+                    "csrf_token": "",
+                },
+                follow_redirects=False,
+            )
             assert response.status_code == 403
 
     def test_submit_missing_phone(self):
@@ -115,12 +124,15 @@ class TestCaptivePortalRoutes:
             response = client.get("/")
             csrf = response.data.decode().split('name="csrf_token" value="')[1].split('"')[0]
 
-            response = client.post("/submit", data={
-                "phone": "",
-                "email": "test@example.com",
-                "country_code": "+91",
-                "csrf_token": csrf
-            })
+            response = client.post(
+                "/submit",
+                data={
+                    "phone": "",
+                    "email": "test@example.com",
+                    "country_code": "+91",
+                    "csrf_token": csrf,
+                },
+            )
             assert b"required" in response.data.lower() or b"error" in response.data.lower()
 
     def test_submit_invalid_email_format(self):
@@ -132,12 +144,15 @@ class TestCaptivePortalRoutes:
             response = client.get("/")
             csrf = response.data.decode().split('name="csrf_token" value="')[1].split('"')[0]
 
-            response = client.post("/submit", data={
-                "phone": "9876543210",
-                "email": "not-an-email",
-                "country_code": "+91",
-                "csrf_token": csrf
-            })
+            response = client.post(
+                "/submit",
+                data={
+                    "phone": "9876543210",
+                    "email": "not-an-email",
+                    "country_code": "+91",
+                    "csrf_token": csrf,
+                },
+            )
             assert b"Invalid email" in response.data or response.status_code == 200
 
     def test_verify_without_csrf_returns_403(self):
@@ -146,12 +161,15 @@ class TestCaptivePortalRoutes:
         config.secret_key = "test-secret-key"
         portal = CaptivePortal(config=config)
         with portal.app.test_client() as client:
-            response = client.post("/verify", data={
-                "otp": "123456",
-                "phone": "+919876543210",
-                "email": "test@example.com",
-                "csrf_token": "bad_token"
-            })
+            response = client.post(
+                "/verify",
+                data={
+                    "otp": "123456",
+                    "phone": "+919876543210",
+                    "email": "test@example.com",
+                    "csrf_token": "bad_token",
+                },
+            )
             assert response.status_code == 403
 
     def test_security_headers_present(self):
@@ -172,11 +190,14 @@ class TestCaptivePortalRoutes:
         config.secret_key = "test-secret-key"
         portal = CaptivePortal(config=config)
         with portal.app.test_client() as client:
-            response = client.post("/resend", data={
-                "phone": "+919876543210",
-                "email": "test@example.com",
-                "csrf_token": "bad_token"
-            })
+            response = client.post(
+                "/resend",
+                data={
+                    "phone": "+919876543210",
+                    "email": "test@example.com",
+                    "csrf_token": "bad_token",
+                },
+            )
             assert response.status_code == 403
 
 
@@ -204,9 +225,7 @@ class TestB1RegressionSessionStrictPhone:
         portal = CaptivePortal(config=config, otp_service=_SpyOTP())
         with portal.app.test_client() as client:
             # Obtain a real csrf token from GET /.
-            csrf = client.get("/").data.decode().split(
-                'name="csrf_token" value="'
-            )[1].split('"')[0]
+            csrf = client.get("/").data.decode().split('name="csrf_token" value="')[1].split('"')[0]
             # Submit a legitimate session phone (the only one we want to allow).
             client.post(
                 "/submit",
@@ -217,9 +236,7 @@ class TestB1RegressionSessionStrictPhone:
                     "country_code": "+91",
                 },
             )
-            csrf = client.get("/").data.decode().split(
-                'name="csrf_token" value="'
-            )[1].split('"')[0]
+            csrf = client.get("/").data.decode().split('name="csrf_token" value="')[1].split('"')[0]
             # /verify: try to override the phone via the hidden form field
             # AND by sending a fresh session phone on a different IP.
             # Only the SESSION phone should be forwarded to verify_otp.
@@ -228,7 +245,7 @@ class TestB1RegressionSessionStrictPhone:
                 data={
                     "csrf_token": csrf,
                     "otp": "000000",
-                    "phone": "+16666666666",        # attacker-supplied
+                    "phone": "+16666666666",  # attacker-supplied
                     "email": "attacker@evil.com",  # attacker-supplied
                 },
             )
@@ -255,22 +272,30 @@ class TestCaptivePortalIntegration:
             html = get_resp.data.decode()
             csrf = html.split('name="csrf_token" value="')[1].split('"')[0]
 
-            submit_resp = client.post("/submit", data={
-                "phone": "9876543210",
-                "email": "testuser@example.com",
-                "country_code": "+91",
-                "csrf_token": csrf
-            }, follow_redirects=False)
+            submit_resp = client.post(
+                "/submit",
+                data={
+                    "phone": "9876543210",
+                    "email": "testuser@example.com",
+                    "country_code": "+91",
+                    "csrf_token": csrf,
+                },
+                follow_redirects=False,
+            )
             assert submit_resp.status_code == 200
             assert b"Verify OTP" in submit_resp.data or b"OTP" in submit_resp.data
 
             otp_html = submit_resp.data.decode()
             otp_csrf = otp_html.split('name="csrf_token" value="')[1].split('"')[0]
 
-            verify_resp = client.post("/verify", data={
-                "otp": "000000",
-                "phone": "+919876543210",
-                "email": "testuser@example.com",
-                "csrf_token": otp_csrf
-            }, follow_redirects=False)
+            verify_resp = client.post(
+                "/verify",
+                data={
+                    "otp": "000000",
+                    "phone": "+919876543210",
+                    "email": "testuser@example.com",
+                    "csrf_token": otp_csrf,
+                },
+                follow_redirects=False,
+            )
             assert verify_resp.status_code == 200

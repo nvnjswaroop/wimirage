@@ -6,21 +6,21 @@ child processes with the provided :class:`ProcessManager`, and tears it all
 back down on :meth:`stop`.
 """
 
+import logging
 import os
 import subprocess
 import time
-import logging
-from typing import Optional
+
 from jinja2 import Template
 
-from core.process_manager import ProcessManager
 from core.paths import (
-    HOSTAPD_CONF_PATH,
     DNSMASQ_CONF_PATH,
-    HOSTAPD_PID_PATH,
     DNSMASQ_PID_PATH,
+    HOSTAPD_CONF_PATH,
+    HOSTAPD_PID_PATH,
     ensure_config_dir,
 )
+from core.process_manager import ProcessManager
 
 logger = logging.getLogger("wimirage")
 
@@ -44,23 +44,29 @@ class RogueAP:
     DEFAULT_GATEWAY = "10.0.0.1"
     DEFAULT_DHCP_RANGE = "10.0.0.2,10.0.0.100"
 
-    def __init__(self, interface: str, ssid: str, channel: int,
-                 gateway: str = DEFAULT_GATEWAY, dhcp_range: str = DEFAULT_DHCP_RANGE,
-                 process_manager: Optional[ProcessManager] = None) -> None:
+    def __init__(
+        self,
+        interface: str,
+        ssid: str,
+        channel: int,
+        gateway: str = DEFAULT_GATEWAY,
+        dhcp_range: str = DEFAULT_DHCP_RANGE,
+        process_manager: ProcessManager | None = None,
+    ) -> None:
         self.interface = interface
         self.ssid = ssid
         self.channel = channel
         self.gateway = gateway
         self.dhcp_range = dhcp_range
-        self.hostapd_proc: Optional[subprocess.Popen] = None
-        self.dnsmasq_proc: Optional[subprocess.Popen] = None
+        self.hostapd_proc: subprocess.Popen | None = None
+        self.dnsmasq_proc: subprocess.Popen | None = None
         self._pm = process_manager or ProcessManager()
         self._hostapd_conf = HOSTAPD_CONF_PATH
         self._dnsmasq_conf = DNSMASQ_CONF_PATH
         self._hostapd_pid = HOSTAPD_PID_PATH
         self._dnsmasq_pid = DNSMASQ_PID_PATH
-        self._hostapd_stderr: Optional[str] = None
-        self._dnsmasq_stderr: Optional[str] = None
+        self._hostapd_stderr: str | None = None
+        self._dnsmasq_stderr: str | None = None
 
     def _generate_hostapd_config(self) -> str:
         """Render ``config/hostapd.conf.j2`` to disk.
@@ -84,11 +90,7 @@ macaddr_acl=0
 ignore_broadcast_ssid=0
 """
         template = Template(template_str)
-        config = template.render(
-            interface=self.interface,
-            ssid=safe_ssid,
-            channel=self.channel
-        )
+        config = template.render(interface=self.interface, ssid=safe_ssid, channel=self.channel)
         ensure_config_dir()
         with open(self._hostapd_conf, "w") as f:
             f.write(config)
@@ -110,9 +112,7 @@ log-dhcp
 """
         template = Template(template_str)
         config = template.render(
-            interface=self.interface,
-            gateway=self.gateway,
-            dhcp_range=self.dhcp_range
+            interface=self.interface, gateway=self.gateway, dhcp_range=self.dhcp_range
         )
         ensure_config_dir()
         with open(self._dnsmasq_conf, "w") as f:
@@ -126,14 +126,34 @@ log-dhcp
             True on success, False on timeout or any other error.
         """
         try:
-            subprocess.run(["ip", "link", "set", self.interface, "down"], check=False,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-            subprocess.run(["ip", "addr", "flush", "dev", self.interface], check=False,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-            subprocess.run(["ip", "link", "set", self.interface, "up"], check=False,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-            subprocess.run(["ip", "addr", "add", f"{self.gateway}/24", "dev", self.interface], check=False,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+            subprocess.run(
+                ["ip", "link", "set", self.interface, "down"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            subprocess.run(
+                ["ip", "addr", "flush", "dev", self.interface],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            subprocess.run(
+                ["ip", "link", "set", self.interface, "up"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            subprocess.run(
+                ["ip", "addr", "add", f"{self.gateway}/24", "dev", self.interface],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
             logger.info(f"Interface {self.interface} configured with IP {self.gateway}")
             return True
         except subprocess.TimeoutExpired:
@@ -149,13 +169,13 @@ log-dhcp
         Returns:
             Log contents as a string, or ``""`` if not readable after retries.
         """
-        for attempt in range(3):
+        for _attempt in range(3):
             try:
                 log_file = f"/tmp/{prefix}_{self.interface}.log"
                 if os.path.exists(log_file):
                     with open(log_file) as f:
                         return f.read()
-            except (OSError, IOError):
+            except OSError:
                 pass
             time.sleep(0.5)
         return ""
@@ -185,7 +205,7 @@ log-dhcp
                 self.hostapd_proc = subprocess.Popen(
                     ["hostapd", "-P", self._hostapd_pid, self._hostapd_conf],
                     stdout=subprocess.DEVNULL,
-                    stderr=stderr_file
+                    stderr=stderr_file,
                 )
                 self._pm.register("hostapd", self.hostapd_proc)
             time.sleep(2)
@@ -210,7 +230,7 @@ log-dhcp
                 self.dnsmasq_proc = subprocess.Popen(
                     ["dnsmasq", "-C", self._dnsmasq_conf, "-d"],
                     stdout=subprocess.DEVNULL,
-                    stderr=stderr_file
+                    stderr=stderr_file,
                 )
                 self._pm.register("dnsmasq", self.dnsmasq_proc)
             time.sleep(1)
@@ -259,5 +279,9 @@ log-dhcp
 
     def is_running(self) -> bool:
         """Return True iff both hostapd and dnsmasq are still alive."""
-        return (self.hostapd_proc is not None and self.hostapd_proc.poll() is None and
-                self.dnsmasq_proc is not None and self.dnsmasq_proc.poll() is None)
+        return (
+            self.hostapd_proc is not None
+            and self.hostapd_proc.poll() is None
+            and self.dnsmasq_proc is not None
+            and self.dnsmasq_proc.poll() is None
+        )

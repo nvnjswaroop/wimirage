@@ -18,13 +18,14 @@ test client without spinning up a real listener.
 from __future__ import annotations
 
 import base64
+import binascii
 import hmac
 import logging
 import os
 import re
 import secrets
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, Optional
 
 from flask import jsonify, request
 
@@ -49,7 +50,7 @@ _MIN_TOKEN_LENGTH = 32
 _DUMMY_DEFAULTS = frozenset({"change-me", "changeme", "admin", "password"})
 
 
-def load_admin_token() -> Optional[str]:
+def load_admin_token() -> str | None:
     """Return the configured admin token from env, or ``None`` if absent/invalid.
 
     The token must be at least 32 characters. Default/placeholder values
@@ -64,7 +65,8 @@ def load_admin_token() -> Optional[str]:
         if len(raw) < _MIN_TOKEN_LENGTH:
             logger.warning(
                 "Admin token in $%s is shorter than %d chars; ignoring.",
-                name, _MIN_TOKEN_LENGTH,
+                name,
+                _MIN_TOKEN_LENGTH,
             )
             return None
         if raw.lower() in _DUMMY_DEFAULTS:
@@ -75,10 +77,7 @@ def load_admin_token() -> Optional[str]:
         # cheats where someone pads a placeholder to clear the 32-char floor).
         lowered = raw.lower()
         for placeholder in _DUMMY_DEFAULTS:
-            if (
-                lowered.startswith(placeholder)
-                or lowered.endswith(placeholder)
-            ):
+            if lowered.startswith(placeholder) or lowered.endswith(placeholder):
                 logger.warning(
                     "Admin token in $%s contains a placeholder substring; ignoring.",
                     name,
@@ -115,7 +114,7 @@ def _check_basic_auth(token: str, request_obj) -> bool:
         return False
     try:
         decoded = base64.b64decode(header[6:], validate=True).decode("utf-8", "replace")
-    except (ValueError, base64.binascii.Error):
+    except (ValueError, binascii.Error):
         return False
     # Accept both ``token`` and ``user:token`` shapes to be friendly to
     # curl users, but only the part after the first colon if present.
@@ -123,7 +122,7 @@ def _check_basic_auth(token: str, request_obj) -> bool:
     return hmac.compare_digest(submitted.encode("utf-8"), token.encode("utf-8"))
 
 
-def audit_admin_access(success: bool, ip: str, path: str, token: Optional[str]) -> None:
+def audit_admin_access(success: bool, ip: str, path: str, token: str | None) -> None:
     """Emit a single audit-log line for an admin auth attempt.
 
     Never logs the token itself; logs only ``ok``/``denied`` plus the IP and
@@ -133,7 +132,9 @@ def audit_admin_access(success: bool, ip: str, path: str, token: Optional[str]) 
     status = "ok" if success else "denied"
     logger.info(
         "admin_auth status=%s ip=%s path=%s",
-        status, scrub_for_log(ip), scrub_for_log(path),
+        status,
+        scrub_for_log(ip),
+        scrub_for_log(path),
     )
 
 
@@ -151,6 +152,7 @@ def admin_required(view: Callable) -> Callable:
     than caching, so operators can rotate the token by ``export``-ing a new
     value without restarting the portal.
     """
+
     @wraps(view)
     def wrapper(*args, **kwargs):
         ip = request.remote_addr or "0.0.0.0"
@@ -158,8 +160,10 @@ def admin_required(view: Callable) -> Callable:
         if not token:
             audit_admin_access(False, ip, request.path, None)
             return jsonify(
-                {"error": "admin endpoint disabled — set "
-                         "CHAYAJALA_ADMIN_TOKEN env var (>=32 chars) to enable"}
+                {
+                    "error": "admin endpoint disabled — set "
+                    "CHAYAJALA_ADMIN_TOKEN env var (>=32 chars) to enable"
+                }
             ), 503
         if not _check_basic_auth(token, request):
             audit_admin_access(False, ip, request.path, token)
@@ -169,6 +173,7 @@ def admin_required(view: Callable) -> Callable:
             return resp
         audit_admin_access(True, ip, request.path, token)
         return view(*args, **kwargs)
+
     return wrapper
 
 

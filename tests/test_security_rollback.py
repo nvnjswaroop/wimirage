@@ -15,11 +15,10 @@ from __future__ import annotations
 import signal
 from unittest.mock import MagicMock, patch
 
-
-
 # ---------------------------------------------------------------------------
 # S-4.1: CaptivePortal installs atexit cleanup that calls flush_iptables
 # ---------------------------------------------------------------------------
+
 
 class TestCaptivePortalAtexitCleanup:
     def test_atexit_registers_flush_callback(self):
@@ -68,8 +67,10 @@ class TestCaptivePortalAtexitCleanup:
         cfg.secret_key = "x" * 32
         CaptivePortal._atexit_registered = False
 
-        with patch("atexit.register") as mock_register, \
-             patch("core.captive_portal.flush_iptables") as mock_flush:
+        with (
+            patch("atexit.register") as mock_register,
+            patch("core.captive_portal.flush_iptables") as mock_flush,
+        ):
             p = CaptivePortal(config=cfg, otp_service=None, network_config=None)
             # Replay the registered callback manually to assert its effect.
             registered_callable = mock_register.call_args[0][0]
@@ -85,9 +86,10 @@ class TestCaptivePortalAtexitCleanup:
         cfg.secret_key = "x" * 32
         CaptivePortal._atexit_registered = False
 
-        with patch("atexit.register") as mock_register, \
-             patch("core.captive_portal.flush_iptables",
-                   side_effect=OSError("iptables missing")):
+        with (
+            patch("atexit.register") as mock_register,
+            patch("core.captive_portal.flush_iptables", side_effect=OSError("iptables missing")),
+        ):
             p = CaptivePortal(config=cfg, otp_service=None, network_config=None)
             cb = mock_register.call_args[0][0]
             # Must not raise even though flush_iptables does.
@@ -98,6 +100,7 @@ class TestCaptivePortalAtexitCleanup:
 # S-4.2: register_cleanup_handler installs SIGINT/SIGTERM handlers
 # ---------------------------------------------------------------------------
 
+
 class TestSignalCleanupHandler:
     def test_sigint_handler_routes_to_cleanup(self):
         """Replacing SIGINT must point at a Cleanup.cleanup_all() entrypoint."""
@@ -107,6 +110,7 @@ class TestSignalCleanupHandler:
         original_term = signal.getsignal(signal.SIGTERM)
         try:
             from utils.cleanup import register_cleanup_handler
+
             handler = register_cleanup_handler()
             assert handler is not None
             new_int = signal.getsignal(signal.SIGINT)
@@ -124,11 +128,13 @@ class TestSignalCleanupHandler:
         from utils.cleanup import Cleanup
 
         c = Cleanup()
-        with patch("utils.cleanup.flush_iptables") as mock_flush, \
-             patch.object(c, "disable_ip_forwarding") as mock_disable, \
-             patch.object(c, "restore_interfaces"), \
-             patch.object(c, "restart_network_manager"), \
-             patch.object(c, "kill_background_processes"):
+        with (
+            patch("utils.cleanup.flush_iptables") as mock_flush,
+            patch.object(c, "disable_ip_forwarding") as mock_disable,
+            patch.object(c, "restore_interfaces"),
+            patch.object(c, "restart_network_manager"),
+            patch.object(c, "kill_background_processes"),
+        ):
             c.cleanup_all()
             mock_flush.assert_called_once()
             mock_disable.assert_called_once()
@@ -138,12 +144,13 @@ class TestSignalCleanupHandler:
         from utils.cleanup import Cleanup
 
         c = Cleanup()
-        with patch("utils.cleanup.flush_iptables"), \
-             patch.object(c, "disable_ip_forwarding"), \
-             patch.object(c, "restore_interfaces",
-                          side_effect=OSError("iface not present")), \
-             patch.object(c, "restart_network_manager"), \
-             patch.object(c, "kill_background_processes"):
+        with (
+            patch("utils.cleanup.flush_iptables"),
+            patch.object(c, "disable_ip_forwarding"),
+            patch.object(c, "restore_interfaces", side_effect=OSError("iface not present")),
+            patch.object(c, "restart_network_manager"),
+            patch.object(c, "kill_background_processes"),
+        ):
             # No exception should bubble up.
             c.cleanup_all()
 
@@ -151,6 +158,7 @@ class TestSignalCleanupHandler:
 # ---------------------------------------------------------------------------
 # S-4.3: cli/entry.main() installs a signal cleanup handler
 # ---------------------------------------------------------------------------
+
 
 class TestCliEntryWiring:
     def test_main_invokes_register_cleanup_handler(self):
@@ -166,11 +174,13 @@ class TestCliEntryWiring:
         # Build a fake AttackContext + MenuHandler. The handler is imported
         # lazily inside ``main()`` (``from utils.cleanup import ...``) so
         # we patch at the *source* module path.
-        with patch.object(entry_mod, "check_root"), \
-             patch("cli.entry.AttackContext", return_value=MagicMock()), \
-             patch("cli.entry.MenuHandler") as mock_menu, \
-             patch("utils.cleanup.register_cleanup_handler", fake_handler), \
-             patch("cli.entry.AppConfig", return_value=MagicMock()):
+        with (
+            patch.object(entry_mod, "check_root"),
+            patch("cli.entry.AttackContext", return_value=MagicMock()),
+            patch("cli.entry.MenuHandler") as mock_menu,
+            patch("utils.cleanup.register_cleanup_handler", fake_handler),
+            patch("cli.entry.AppConfig", return_value=MagicMock()),
+        ):
             entry_mod.main()
         assert called["n"] >= 1, (
             "main() did not wire register_cleanup_handler — host network will "

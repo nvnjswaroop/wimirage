@@ -9,7 +9,7 @@ import logging
 import subprocess
 import threading
 import time
-from typing import Optional, Callable
+from collections.abc import Callable
 
 logger = logging.getLogger("wimirage")
 
@@ -24,7 +24,7 @@ class ProcessManager:
         # name -> callback to invoke when (re)spawning
         self._restart_callbacks: dict[str, Callable[[], subprocess.Popen]] = {}
         self._lock = threading.Lock()
-        self._watchdog_thread: Optional[threading.Thread] = None
+        self._watchdog_thread: threading.Thread | None = None
         self._running = False
 
     def register(
@@ -32,7 +32,7 @@ class ProcessManager:
         name: str,
         proc: subprocess.Popen,
         restart: bool = False,
-        restart_callback: Optional[Callable[[], subprocess.Popen]] = None,
+        restart_callback: Callable[[], subprocess.Popen] | None = None,
     ) -> None:
         """Track ``proc`` under ``name``; optionally spawn a per-process watchdog.
 
@@ -50,9 +50,7 @@ class ProcessManager:
                 self._restart_callbacks[name] = restart_callback
 
         if restart and restart_callback is not None:
-            t = threading.Thread(
-                target=self._watch_one, args=(name,), daemon=True
-            )
+            t = threading.Thread(target=self._watch_one, args=(name,), daemon=True)
             t.start()
 
     def _watch_one(self, name: str) -> None:
@@ -108,12 +106,18 @@ class ProcessManager:
         # Best-effort sweep to clear any stragglers.
         try:
             subprocess.run(
-                ["killall", "hostapd"], check=False,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+                ["killall", "hostapd"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
             )
             subprocess.run(
-                ["killall", "dnsmasq"], check=False,
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+                ["killall", "dnsmasq"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
             )
         except (subprocess.SubprocessError, OSError):
             # best-effort cleanup; ``killall`` may fail when dnsmasq
@@ -142,10 +146,7 @@ class ProcessManager:
         def watch_all():
             while self._running:
                 with self._lock:
-                    dead = [
-                        n for n, p in self._processes.items()
-                        if p.poll() is not None
-                    ]
+                    dead = [n for n, p in self._processes.items() if p.poll() is not None]
                 for name in dead:
                     logger.warning(f"Process '{name}' is no longer running.")
                 time.sleep(interval)

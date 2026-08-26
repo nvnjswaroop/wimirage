@@ -1,5 +1,6 @@
 import subprocess
 from unittest.mock import MagicMock, patch
+
 from core.process_manager import ProcessManager
 
 
@@ -67,8 +68,11 @@ class TestProcessManager:
         pm.register("dnsmasq", p1)
         pm.kill_all()
         mock_run.assert_any_call(
-            ["killall", "hostapd"], check=False,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5
+            ["killall", "hostapd"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
         )
 
     def test_is_alive_true(self):
@@ -125,6 +129,7 @@ class TestWatchdogRestart:
                 proc.poll.return_value = None  # alive
                 new_procs.append(proc)
                 return proc
+
             cb.calls = calls
             return cb
 
@@ -140,6 +145,7 @@ class TestWatchdogRestart:
         # the dead process. Threshold is generous so this works on slow
         # boxes without flaking on fast ones.
         import time as _t
+
         deadline = _t.monotonic() + 2.0
         new = pm.get_all().get("hostapd")
         while (new is dead_proc or new is None) and _t.monotonic() < deadline:
@@ -154,6 +160,7 @@ class TestWatchdogRestart:
 
     def test_kill_deregisters_restart_callback(self, monkeypatch):
         from core import process_manager as pm_mod
+
         monkeypatch.setattr(pm_mod.time, "sleep", lambda _: None)
 
         cb = MagicMock()
@@ -164,6 +171,7 @@ class TestWatchdogRestart:
 
         # Give the watchdog thread a chance to start.
         import time as _t
+
         _t.sleep(0.1)
 
         pm.kill("daemon")
@@ -176,6 +184,7 @@ class TestRegistryThreadSafety:
 
     def test_concurrent_register_then_query(self):
         import threading as _th
+
         pm = ProcessManager()
         errors: list = []
 

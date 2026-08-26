@@ -12,10 +12,10 @@ Exposes:
   per-client internet allow-listing.
 """
 
-import subprocess
-import os
 import json
 import logging
+import os
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -61,6 +61,7 @@ def _backup_path() -> str:
     """
     try:
         from core.paths import LOGS_DIR, ensure_logs_dir
+
         ensure_logs_dir()
         return str(Path(LOGS_DIR) / _BACKUP_FILENAME)
     except Exception:  # pragma: no cover - non-filesystem,
@@ -82,11 +83,15 @@ def backup_iptables() -> bool:
     try:
         nat = subprocess.run(
             ["iptables-save", "-t", "nat"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         filt = subprocess.run(
             ["iptables-save", "-t", "filter"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         # If both invocations blew up with 127 / FileNotFoundError we treat
         # that as "no iptables, skip the backup" — see Section 9 hardening
@@ -95,7 +100,8 @@ def backup_iptables() -> bool:
         if nat.returncode != 0 and filt.returncode != 0:
             logger.warning(
                 "iptables-save exited %d/%d; skipping backup.",
-                nat.returncode, filt.returncode,
+                nat.returncode,
+                filt.returncode,
             )
             return False
         payload = {
@@ -183,13 +189,16 @@ def restore_iptables() -> bool:
         result = subprocess.run(
             ["iptables-restore"],
             input=blob,
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode != 0:
             _safe_log(
                 logging.ERROR,
                 "iptables-restore (rollback) failed: rc=%d stderr=%s",
-                result.returncode, result.stderr.strip()[:300],
+                result.returncode,
+                result.stderr.strip()[:300],
             )
             return False
         _safe_log(logging.INFO, "iptables rolled back to pre-attack snapshot.")
@@ -201,7 +210,8 @@ def restore_iptables() -> bool:
         _safe_log(
             logging.ERROR,
             "Failed to parse/restore iptables backup: %s: %s",
-            type(e).__name__, e,
+            type(e).__name__,
+            e,
         )
         # Section 9 hardening: wipe the corrupt backup so a follow-up
         # call to ``restore_iptables`` doesn't loop on the same dead
@@ -227,20 +237,41 @@ def flush_iptables() -> None:
     """
     try:
         cmd_results = [
-            subprocess.run(["iptables", "-F"], check=False,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10),
-            subprocess.run(["iptables", "-t", "nat", "-F"], check=False,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10),
-            subprocess.run(["iptables", "-X"], check=False,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10),
-            subprocess.run(["iptables", "-t", "nat", "-X"], check=False,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10),
+            subprocess.run(
+                ["iptables", "-F"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            ),
+            subprocess.run(
+                ["iptables", "-t", "nat", "-F"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            ),
+            subprocess.run(
+                ["iptables", "-X"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            ),
+            subprocess.run(
+                ["iptables", "-t", "nat", "-X"],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            ),
         ]
         if any(r.returncode != 0 for r in cmd_results):
             bad = [i for i, r in enumerate(cmd_results) if r.returncode != 0]
             logger.warning(
                 "iptables flush returned non-zero for commands at indices %s; "
-                "stale rules may remain.", bad,
+                "stale rules may remain.",
+                bad,
             )
         else:
             logger.info("iptables rules flushed.")
@@ -248,7 +279,8 @@ def flush_iptables() -> None:
         _safe_log(
             logging.ERROR,
             "Failed to flush iptables: %s: %s",
-            type(e).__name__, e,
+            type(e).__name__,
+            e,
         )
 
 
@@ -266,8 +298,13 @@ class NetworkConfig:
     DEFAULT_PORTAL_PORT = 80
     DEFAULT_GATEWAY = "10.0.0.1"
 
-    def __init__(self, internet_interface: str, ap_interface: str,
-                 portal_port: int = DEFAULT_PORTAL_PORT, gateway: str = DEFAULT_GATEWAY) -> None:
+    def __init__(
+        self,
+        internet_interface: str,
+        ap_interface: str,
+        portal_port: int = DEFAULT_PORTAL_PORT,
+        gateway: str = DEFAULT_GATEWAY,
+    ) -> None:
         self.internet_interface = internet_interface
         self.ap_interface = ap_interface
         self.portal_port = portal_port
@@ -288,7 +325,7 @@ class NetworkConfig:
         except PermissionError:
             logger.error("Permission denied enabling IP forwarding. Are you root?")
             return False
-        except IOError as e:
+        except OSError as e:
             logger.error(f"Failed to enable IP forwarding: {e}")
             return False
 
@@ -298,7 +335,7 @@ class NetworkConfig:
             with open("/proc/sys/net/ipv4/ip_forward", "w") as f:
                 f.write("0")
             logger.info("IP forwarding disabled.")
-        except (PermissionError, IOError, OSError) as e:
+        except (PermissionError, OSError) as e:
             logger.error(f"Failed to disable IP forwarding: {type(e).__name__}: {e}")
 
     def setup_iptables(self) -> bool:
@@ -335,8 +372,7 @@ class NetworkConfig:
                 rules_file = f.name
 
             result = subprocess.run(
-                ["iptables-restore", rules_file],
-                capture_output=True, text=True, timeout=10
+                ["iptables-restore", rules_file], capture_output=True, text=True, timeout=10
             )
             os.unlink(rules_file)
 
@@ -367,21 +403,86 @@ class NetworkConfig:
         """Apply iptables rules one command at a time (used if restore is missing)."""
         try:
             cmds = [
-                ["iptables", "-t", "nat", "-A", "PREROUTING", "-i", self.ap_interface,
-                 "-p", "tcp", "--dport", "80", "-j", "DNAT",
-                 "--to-destination", f"{self.gateway}:{self.portal_port}"],
-                ["iptables", "-t", "nat", "-A", "PREROUTING", "-i", self.ap_interface,
-                 "-p", "udp", "--dport", "53", "-j", "DNAT",
-                 "--to-destination", self.gateway],
-                ["iptables", "-t", "nat", "-A", "POSTROUTING", "-o", self.internet_interface,
-                 "-j", "MASQUERADE"],
-                ["iptables", "-A", "FORWARD", "-i", self.ap_interface, "-o", self.internet_interface,
-                 "-j", "ACCEPT"],
-                ["iptables", "-A", "FORWARD", "-i", self.internet_interface, "-o", self.ap_interface,
-                 "-m", "state", "--state", "RELATED,ESTABLISHED", "-j", "ACCEPT"],
+                [
+                    "iptables",
+                    "-t",
+                    "nat",
+                    "-A",
+                    "PREROUTING",
+                    "-i",
+                    self.ap_interface,
+                    "-p",
+                    "tcp",
+                    "--dport",
+                    "80",
+                    "-j",
+                    "DNAT",
+                    "--to-destination",
+                    f"{self.gateway}:{self.portal_port}",
+                ],
+                [
+                    "iptables",
+                    "-t",
+                    "nat",
+                    "-A",
+                    "PREROUTING",
+                    "-i",
+                    self.ap_interface,
+                    "-p",
+                    "udp",
+                    "--dport",
+                    "53",
+                    "-j",
+                    "DNAT",
+                    "--to-destination",
+                    self.gateway,
+                ],
+                [
+                    "iptables",
+                    "-t",
+                    "nat",
+                    "-A",
+                    "POSTROUTING",
+                    "-o",
+                    self.internet_interface,
+                    "-j",
+                    "MASQUERADE",
+                ],
+                [
+                    "iptables",
+                    "-A",
+                    "FORWARD",
+                    "-i",
+                    self.ap_interface,
+                    "-o",
+                    self.internet_interface,
+                    "-j",
+                    "ACCEPT",
+                ],
+                [
+                    "iptables",
+                    "-A",
+                    "FORWARD",
+                    "-i",
+                    self.internet_interface,
+                    "-o",
+                    self.ap_interface,
+                    "-m",
+                    "state",
+                    "--state",
+                    "RELATED,ESTABLISHED",
+                    "-j",
+                    "ACCEPT",
+                ],
             ]
             for cmd in cmds:
-                subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=10,
+                )
 
             self.enable_ip_forwarding()
             logger.info("iptables configuration complete (fallback mode).")
@@ -404,12 +505,31 @@ class NetworkConfig:
             return True
         try:
             result = subprocess.run(
-                ["iptables", "-t", "nat", "-I", "PREROUTING", "1", "-s", client_ip,
-                 "-p", "tcp", "--dport", "80", "-j", "ACCEPT"],
-                check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10
+                [
+                    "iptables",
+                    "-t",
+                    "nat",
+                    "-I",
+                    "PREROUTING",
+                    "1",
+                    "-s",
+                    client_ip,
+                    "-p",
+                    "tcp",
+                    "--dport",
+                    "80",
+                    "-j",
+                    "ACCEPT",
+                ],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
             )
             if result.returncode != 0:
-                logger.error(f"iptables rule insert failed for {client_ip} (rc={result.returncode})")
+                logger.error(
+                    f"iptables rule insert failed for {client_ip} (rc={result.returncode})"
+                )
                 return False
             self._granted_ips.add(client_ip)
             logger.info(f"Internet access granted to {client_ip}")

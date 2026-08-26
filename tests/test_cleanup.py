@@ -1,7 +1,9 @@
-import pytest
-from unittest.mock import patch, MagicMock, ANY
-from utils.cleanup import Cleanup, register_cleanup_handler
 import signal
+from unittest.mock import ANY, MagicMock, patch
+
+import pytest
+
+from utils.cleanup import Cleanup, register_cleanup_handler
 
 
 class TestCleanup:
@@ -38,9 +40,7 @@ class TestCleanup:
         assert "dnsmasq" in cmd_targets
         # Each call has capture_output=True (count is what cerrar ()  uses).
         for c in mock_run.call_args_list:
-            assert c.kwargs.get("capture_output") is True, (
-                f"unexpected keyword: {c.kwargs}"
-            )
+            assert c.kwargs.get("capture_output") is True, f"unexpected keyword: {c.kwargs}"
 
     @patch("subprocess.run")
     def test_disable_ip_forwarding(self, mock_run):
@@ -95,8 +95,7 @@ class TestSigintHandlerInvokesCleanup:
     @patch("signal.signal")
     @patch("utils.cleanup.flush_iptables")
     @patch("utils.cleanup.Cleanup.cleanup_all")
-    def test_sigint_invokes_cleanup_all(self, mock_cleanup_all, mock_flush,
-                                       mock_signal, mock_exit):
+    def test_sigint_invokes_cleanup_all(self, mock_cleanup_all, mock_flush, mock_signal, mock_exit):
         from utils.cleanup import register_cleanup_handler
 
         cleaner = register_cleanup_handler(interfaces=["wlan0"])
@@ -119,9 +118,11 @@ class TestSigintHandlerInvokesCleanup:
     @patch("signal.signal")
     @patch("utils.cleanup.flush_iptables")
     @patch("utils.cleanup.Cleanup.cleanup_all")
-    def test_sigterm_invokes_cleanup_all(self, mock_cleanup_all, mock_flush,
-                                         mock_signal, mock_exit):
+    def test_sigterm_invokes_cleanup_all(
+        self, mock_cleanup_all, mock_flush, mock_signal, mock_exit
+    ):
         from utils.cleanup import register_cleanup_handler
+
         register_cleanup_handler(interfaces=["wlan0mon"], internet_interface="eth0")
 
         sigterm_handler = None

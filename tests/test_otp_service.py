@@ -1,9 +1,13 @@
-import pytest
 import time
+
+import pytest
+
 from core.otp_service import (
-    DemoOTPService, TwilioOTPService, OTPServiceInterface
+    VALID_COUNTRY_CODES,
+    DemoOTPService,
+    OTPServiceInterface,
+    TwilioOTPService,
 )
-from core.otp_service import VALID_COUNTRY_CODES
 
 
 class TestOTPServiceInterface:
@@ -28,7 +32,10 @@ class TestBaseOTPService:
     def test_generate_otp_stores_hash_not_plaintext(self):
         service = DemoOTPService()
         otp = service.generate_otp("+919876543210")
-        assert otp in service._otp_store["+919876543210"]["otp_hash"] or service._otp_store["+919876543210"]["otp_hash"]
+        assert (
+            otp in service._otp_store["+919876543210"]["otp_hash"]
+            or service._otp_store["+919876543210"]["otp_hash"]
+        )
 
     def test_verify_correct_otp(self):
         service = DemoOTPService()
@@ -86,6 +93,7 @@ class TestDemoOTPService:
     def test_send_otp_logs_otp(self, caplog):
         """DemoOTPService.send_otp must surface the OTP value via the logger."""
         import logging
+
         caplog.set_level(logging.INFO, logger="wimirage")
         service = DemoOTPService()
         service.send_otp("+919****3210", "123456")
@@ -95,6 +103,7 @@ class TestDemoOTPService:
     def test_generate_otp_logs_demo_message(self, caplog):
         """DemoOTPService.generate_otp must log a 'DEMO' line so devs can see OTPs."""
         import logging
+
         caplog.set_level(logging.INFO, logger="wimirage")
         service = DemoOTPService()
         service.generate_otp("+919****3210")
@@ -139,20 +148,20 @@ class TestOtpHashInvariants:
         assert 20 <= len(salt_b64) <= 32, "salt base64 length out of range"
         # SHA-256 hex digest is 64 lowercase hex chars.
         assert len(digest) == 64
-        assert all(c in "0123456789abcdef" for c in digest), \
-            "stored digest must be lowercase hex"
+        assert all(c in "0123456789abcdef" for c in digest), "stored digest must be lowercase hex"
 
     def test_hash_matches_salted_sha256_of_otp(self):
         import base64
         import hashlib
+
         from core.otp_service import DemoOTPService
+
         service = DemoOTPService()
         plaintext = service.generate_otp("+91ABCDEF0123")
         salt_b64, _, stored_digest = service._otp_store["+91ABCDEF0123"]["otp_hash"].partition("$")
         salt = base64.b64decode(salt_b64, validate=False)
         expected = hashlib.sha256(salt + plaintext.encode()).hexdigest()
-        assert stored_digest == expected, \
-            "stored digest must equal SHA-256(salt || otp)"
+        assert stored_digest == expected, "stored digest must equal SHA-256(salt || otp)"
         # And the OTP itself must NOT match an unsalted SHA-256 of itself —
         # otherwise we accidentally stored the legacy unsalted shape.
         unsalted = hashlib.sha256(plaintext.encode()).hexdigest()
@@ -173,21 +182,22 @@ class TestOtpHashInvariants:
     def test_hmac_compare_digest_used(self):
         """Verify verify_otp uses hmac.compare_digest, not ==."""
         import inspect
+
         import core.otp_service as otp_mod
+
         src = inspect.getsource(otp_mod.BaseOTPService.verify_otp)
-        assert "compare_digest" in src, \
-            "verify_otp must use hmac.compare_digest for timing safety"
+        assert "compare_digest" in src, "verify_otp must use hmac.compare_digest for timing safety"
         # And not the naive '=='.
         # The substring `== stored[` is fine because stored lookup uses
         # a dict; the boolean-compare we care about is the hash equality.
-        assert "input_hash == stored" not in src, \
-            "verify_otp must not use == on hash digests"
+        assert "input_hash == stored" not in src, "verify_otp must not use == on hash digests"
 
 
 # ---------------------------------------------------------------------------
 # BackendError contract — Twilio (and any future backend) must wrap vendor
 # exceptions in OTPBackendError so route handlers don't depend on vendor SDKs.
 # ---------------------------------------------------------------------------
+
 
 class TestOTPBackendError:
     def test_twilio_wraps_oserror_as_backend_error(self, monkeypatch):

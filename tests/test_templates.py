@@ -24,9 +24,7 @@ def patch_default_otp_service(f):
     Defined at module top so test collection sees the name before the
     @patch_default_otp_service decorators above are evaluated.
     """
-    return _mock.patch.object(
-        CaptivePortal, "_setup_app", lambda self: None
-    )(f)
+    return _mock.patch.object(CaptivePortal, "_setup_app", lambda self: None)(f)
 
 
 @pytest.fixture
@@ -62,6 +60,7 @@ def client(portal: CaptivePortal):
 # Sanity: every GET on the portal surfaces a CSRF token
 # ---------------------------------------------------------------------------
 
+
 class TestCsrfTokens:
     def test_index_renders_csrf(self, client):
         resp = client.get("/")
@@ -82,6 +81,7 @@ class TestCsrfTokens:
 # No hardcoded secrets text in any rendered HTML
 # ---------------------------------------------------------------------------
 
+
 class TestNoHardcodedSecrets:
     """Templated output must never carry operator-side credentials."""
 
@@ -91,8 +91,11 @@ class TestNoHardcodedSecrets:
         body = resp.get_data(as_text=True)
         # These strings must never appear in any rendered template.
         forbidden = [
-            "TWILIO_SID", "TWILIO_TOKEN", "TWILIO_PHONE",
-            "secret_key", "client_secret",
+            "TWILIO_SID",
+            "TWILIO_TOKEN",
+            "TWILIO_PHONE",
+            "secret_key",
+            "client_secret",
             "change-me-in-production",
         ]
         for tok in forbidden:
@@ -102,6 +105,7 @@ class TestNoHardcodedSecrets:
 # ---------------------------------------------------------------------------
 # /submit /verify /resend — invalid CSRF or invalid payload must 4xx
 # ---------------------------------------------------------------------------
+
 
 class TestSubmitValidation:
     def test_post_with_no_csrf_returns_4xx(self, client):
@@ -142,6 +146,7 @@ class TestResendValidation:
 # Rate-limit enforced (Section 7 #10 — rate_limit decorator returns 429)
 # ---------------------------------------------------------------------------
 
+
 class TestRateLimit:
     """Section 7 #10: verify the per-IP 429 response when the cap is reached."""
 
@@ -181,6 +186,7 @@ class TestRateLimit:
 # /submit successful path uses the DemoOTPService when otp_service=None
 # ---------------------------------------------------------------------------
 
+
 class TestSubmitHappyPath:
     @patch_default_otp_service
     def test_submit_logs_credential(self, client):
@@ -206,6 +212,7 @@ class TestSubmitHappyPath:
 # (no inline JS, no hardcoded "www.google.com", meta-refresh only).
 # ---------------------------------------------------------------------------
 
+
 class TestB2RegressionSuccessHtmlSafe:
     """Regression test for review-finding B2.
 
@@ -219,9 +226,12 @@ class TestB2RegressionSuccessHtmlSafe:
 
     def test_success_html_has_meta_refresh(self):
         from pathlib import Path
-        html = Path("C:/Users/JYOTHI/OneDrive/Desktop/Wifi-project/portal/templates/success.html").read_text(encoding="utf-8")
+
+        html = Path(
+            "C:/Users/JYOTHI/OneDrive/Desktop/Wifi-project/portal/templates/success.html"
+        ).read_text(encoding="utf-8")
         assert '<meta http-equiv="refresh"' in html, (
-            "B2 regressed: success.html must use <meta http-equiv=\"refresh\"> "
+            'B2 regressed: success.html must use <meta http-equiv="refresh"> '
             "so the CSP (script-src 'self') is honoured."
         )
         # Must use the template parameter, not a hardcoded URL.
@@ -233,7 +243,10 @@ class TestB2RegressionSuccessHtmlSafe:
     def test_success_html_has_no_inline_setTimeout_to_google(self):
         import re
         from pathlib import Path
-        raw = Path("C:/Users/JYOTHI/OneDrive/Desktop/Wifi-project/portal/templates/success.html").read_text(encoding="utf-8")
+
+        raw = Path(
+            "C:/Users/JYOTHI/OneDrive/Desktop/Wifi-project/portal/templates/success.html"
+        ).read_text(encoding="utf-8")
         # Strip HTML comments so doc-notes mentioning the bug we're
         # closing don't false-flag the regression check.
         html = re.sub(r"<!--.*?-->", "", raw, flags=re.DOTALL)

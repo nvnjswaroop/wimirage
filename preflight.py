@@ -15,13 +15,12 @@ Returns 0 on success, 1 if any required check fails.
 
 from __future__ import annotations
 
+import os
+import re
 import shutil
 import subprocess
 import sys
-import os
-import re
-from typing import Iterable
-
+from collections.abc import Iterable
 
 # Required CLI binaries. ``airmon-ng`` is optional — many users have
 # iwconfig / iw and don't need the aircrack-ng wrapper.
@@ -38,7 +37,7 @@ REQUIRED_BINARIES = [
 ]
 
 OPTIONAL_BINARIES = [
-    "airmon-ng",     # only needed as fallback when iwconfig fails
+    "airmon-ng",  # only needed as fallback when iwconfig fails
 ]
 
 # cryptography is optional — only required when encrypted_logs=True.
@@ -50,7 +49,7 @@ REQUIRED_PYTHON_PACKAGES = [
 
 OPTIONAL_PYTHON_PACKAGES = [
     "cryptography",  # only needed for [encrypt] extra
-    "twilio",        # only needed for [sms] extra
+    "twilio",  # only needed for [sms] extra
 ]
 
 # Section 8 #5: pulled from pyproject.toml's `requires-python` so we have
@@ -87,8 +86,7 @@ def _load_python_version_constraint() -> tuple[tuple[int, int], tuple[int, int]]
             m = re.match(r">=(\d+)\.(\d+)(?:,<(\d+)\.(\d+))?", spec)
             if m:
                 lo = (int(m.group(1)), int(m.group(2)))
-                hi = (int(m.group(3)) if m.group(3) else 99,
-                      int(m.group(4)) if m.group(4) else 0)
+                hi = (int(m.group(3)) if m.group(3) else 99, int(m.group(4)) if m.group(4) else 0)
                 if hi == (99, 0):
                     hi = MAX_PYTHON
                 return lo, hi
@@ -137,7 +135,9 @@ def check_default_route() -> bool:
     try:
         result = subprocess.run(
             ["ip", "route", "show", "default"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode != 0:
             print(f"  [FAIL] 'ip route show default' exited {result.returncode}")
@@ -213,7 +213,9 @@ def main() -> int:
     try:
         result = subprocess.run(
             ["ip", "link", "show"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             interfaces = [

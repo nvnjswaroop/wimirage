@@ -16,23 +16,21 @@ Covers:
 """
 
 import json
-import subprocess
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from core.network import (
+    _BACKUP_FILENAME,
     NetworkConfig,
     backup_iptables,
     restore_iptables,
-    flush_iptables,
-    _BACKUP_FILENAME,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def fake_backup_path(tmp_path, monkeypatch):
@@ -53,12 +51,7 @@ def _good_save_payload() -> dict:
             "-A POSTROUTING -o wg0 -j MASQUERADE\n"
             "COMMIT\n"
         ),
-        "filter": (
-            "*filter\n"
-            ":FORWARD ACCEPT [0:0]\n"
-            "-A FORWARD -i docker0 -j ACCEPT\n"
-            "COMMIT\n"
-        ),
+        "filter": ("*filter\n:FORWARD ACCEPT [0:0]\n-A FORWARD -i docker0 -j ACCEPT\nCOMMIT\n"),
         # An attacker file might still be in here, but as long as JSON parses
         # we move on. (We use string values, not str inputs — the JSON
         # encoder objects to MagicMock traces from a poorly-patched test.)
@@ -68,6 +61,7 @@ def _good_save_payload() -> dict:
 # ---------------------------------------------------------------------------
 # backup_iptables
 # ---------------------------------------------------------------------------
+
 
 class TestBackupIptables:
     """When iptables-save runs successfully we should see a JSON dump."""
@@ -91,6 +85,7 @@ class TestBackupIptables:
         assert backup_iptables() is False
         # And no garbage file left behind.
         import os as _os
+
         assert not _os.path.exists(fake_backup_path)
 
     @patch("subprocess.run")
@@ -107,6 +102,7 @@ class TestBackupIptables:
 # restore_iptables
 # ---------------------------------------------------------------------------
 
+
 class TestRestoreIptables:
     """Restore replays the snapshot and survives malformed backups."""
 
@@ -116,7 +112,9 @@ class TestRestoreIptables:
 
     @patch("subprocess.run")
     def test_replays_blob_to_iptables_restore(
-        self, mock_run, fake_backup_path,
+        self,
+        mock_run,
+        fake_backup_path,
     ):
         """End-to-end happy path: file present → iptables-restore invoked
         with the concatenated nat+filter blob."""
@@ -131,13 +129,17 @@ class TestRestoreIptables:
         mock_run.assert_called_once()
         call = mock_run.call_args
         assert call.args[0] == ["iptables-restore"]
-        injected = call.kwargs.get("input") or call.args[1] if len(call.args) > 1 else call.kwargs["input"]
+        injected = (
+            call.kwargs.get("input") or call.args[1] if len(call.args) > 1 else call.kwargs["input"]
+        )
         assert "docker0" in injected
         assert "wg0" in injected
 
     @patch("subprocess.run")
     def test_iptables_restore_failure_returns_false_not_raises(
-        self, mock_run, fake_backup_path,
+        self,
+        mock_run,
+        fake_backup_path,
     ):
         """Non-zero rc from iptables-restore → False (best-effort rollback)."""
         with open(fake_backup_path, "w", encoding="utf-8") as f:
@@ -156,6 +158,7 @@ class TestRestoreIptables:
             assert restore_iptables() is False
 
         import os as _os
+
         assert _os.path.exists(fake_backup_path) is False, (
             "restore_iptables must self-heal corrupt backups to avoid looping"
         )
@@ -171,6 +174,7 @@ class TestRestoreIptables:
 # NetworkConfig integration — rollout sequencing
 # ---------------------------------------------------------------------------
 
+
 class TestNetworkConfigRollback:
     """Confirm setup→backup is called BEFORE our chains; cleanup→restore."""
 
@@ -179,7 +183,12 @@ class TestNetworkConfigRollback:
     @patch("subprocess.run")
     @patch("tempfile.NamedTemporaryFile")
     def test_setup_calls_backup(
-        self, mock_temp, mock_run, mock_backup, mock_restore, tmp_path,
+        self,
+        mock_temp,
+        mock_run,
+        mock_backup,
+        mock_restore,
+        tmp_path,
     ):
         """setup_iptables() must invoke backup_iptables() before our own
         iptables-restore pushes the NAT+filter templates — otherwise the
@@ -199,7 +208,10 @@ class TestNetworkConfigRollback:
     @patch("core.network.restore_iptables", create=True)
     @patch("core.network.backup_iptables", create=True)
     def test_cleanup_calls_restore(
-        self, _mock_backup, mock_restore, mock_flush,
+        self,
+        _mock_backup,
+        mock_restore,
+        mock_flush,
     ):
         """cleanup() must invoke restore_iptables() AFTER our chains are
         flushed, so unrelated chains (e.g. docker) come back too."""

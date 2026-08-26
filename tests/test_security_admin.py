@@ -11,7 +11,7 @@ import base64
 import pytest
 
 from core.captive_portal import CaptivePortal
-from portal.admin import _mask_phone, _mask_email
+from portal.admin import _mask_email, _mask_phone
 
 
 @pytest.fixture
@@ -41,6 +41,7 @@ def _basic_header(token: str) -> dict:
 # S-2.1: /admin/captured requires auth
 # ---------------------------------------------------------------------------
 
+
 class TestAdminAuth:
     """Every admin path must gate on the env token. No env = 503. Wrong = 401."""
 
@@ -49,9 +50,7 @@ class TestAdminAuth:
         monkeypatch.setattr("atexit.register", lambda *_a, **_kw: None)
         monkeypatch.setattr("core.captive_portal.flush_iptables", lambda: None)
         CaptivePortal._atexit_registered = False
-        return CaptivePortal(
-            config=app_config, otp_service=None, network_config=None
-        )
+        return CaptivePortal(config=app_config, otp_service=None, network_config=None)
 
     def test_unset_token_returns_503(self, app_config, monkeypatch):
         """Without CHAYAJALA_ADMIN_TOKEN set, the admin endpoint refuses to run."""
@@ -99,9 +98,7 @@ class TestAdminAuth:
             )
         assert resp.status_code == 401
 
-    def test_correct_token_returns_200_and_masks_records(
-        self, app_config, monkeypatch
-    ):
+    def test_correct_token_returns_200_and_masks_records(self, app_config, monkeypatch):
         good = "x" * 40
         monkeypatch.setenv("CHAYAJALA_ADMIN_TOKEN", good)
         p = self._fresh_portal(app_config, monkeypatch)
@@ -142,24 +139,23 @@ class TestAdminAuth:
         # has_otp — not the value.
         assert rec["phone_masked"] != phone_seed
         assert rec["email_masked"] != "victim@example.com"
-        assert "123456" not in (
-            rec["phone_masked"] + rec["email_masked"]
-        )
+        assert "123456" not in (rec["phone_masked"] + rec["email_masked"])
 
 
 # ---------------------------------------------------------------------------
 # S-2.2: masking helpers behave on edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestMaskingHelpers:
     @pytest.mark.parametrize(
         "raw,expected_prefix_len,expected_tail_len",
         [
-            ("+911234567890", 3, 4),    # 12 chars: head 3, tail 4, masked middle
-            ("+1234567890",  3, 4),     # 11 chars: same shape, narrower middle
-            ("+1234",        0, 0),     # short — fully redacted (no head/tail)
-            ("",             0, 0),
-            (None,           0, 0),
+            ("+911234567890", 3, 4),  # 12 chars: head 3, tail 4, masked middle
+            ("+1234567890", 3, 4),  # 11 chars: same shape, narrower middle
+            ("+1234", 0, 0),  # short — fully redacted (no head/tail)
+            ("", 0, 0),
+            (None, 0, 0),
         ],
     )
     def test_mask_phone_shape(self, raw, expected_prefix_len, expected_tail_len):
@@ -204,6 +200,7 @@ class TestMaskingHelpers:
 # S-2.3: rotate-token support — token loaded per-request, not cached
 # ---------------------------------------------------------------------------
 
+
 class TestTokenHotReload:
     def test_token_rotated_mid_run(self, monkeypatch, app_config):
         """New env value should take effect on the very next request."""
@@ -217,10 +214,13 @@ class TestTokenHotReload:
         CaptivePortal._atexit_registered = False
         p = CaptivePortal(config=app_config, otp_service=None, network_config=None)
         with p.app.test_client() as c:
-            assert c.get(
-                "/admin/captured",
-                headers=_basic_header(tok_a),
-            ).status_code == 200
+            assert (
+                c.get(
+                    "/admin/captured",
+                    headers=_basic_header(tok_a),
+                ).status_code
+                == 200
+            )
 
         # Rotate.
         monkeypatch.setenv("CHAYAJALA_ADMIN_TOKEN", tok_b)

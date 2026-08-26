@@ -5,15 +5,15 @@ These run with pytest; if `hypothesis` is not installed in CI they will
 auto-skip via the `@pytest.mark.skipif` guard rather than fail the build.
 """
 
-
 import pytest
 
 try:
-    from hypothesis import given, settings
-    from hypothesis import strategies as st
+    from hypothesis import given, settings, strategies as st
+
     HAVE_HYPOTHESIS = True
-except ImportError:                                  # pragma: no cover
+except ImportError:  # pragma: no cover
     HAVE_HYPOTHESIS = False
+
     # No-op fallbacks so the ``@settings`` / ``@given`` decorators below
     # still evaluate at collection time without crashing the whole suite
     # run (the module is skipped wholesale via pytestmark). Without these,
@@ -22,11 +22,13 @@ except ImportError:                                  # pragma: no cover
     def settings(*_a, **_kw):
         def _wrap(fn):
             return fn
+
         return _wrap
 
     def given(*_a, **_kw):
         def _wrap(fn):
             return lambda *args, **kwargs: None
+
         return _wrap
 
     class _MissingStrategy:
@@ -46,8 +48,7 @@ except ImportError:                                  # pragma: no cover
     st = _MissingStrategy()
 
 
-from core.captive_portal import validate_phone, validate_email
-
+from core.captive_portal import validate_email, validate_phone
 
 pytestmark = pytest.mark.skipif(
     not HAVE_HYPOTHESIS,
@@ -58,6 +59,7 @@ pytestmark = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 # Sanity: regex stuck in place — pasting the same shape should never crash.
 # ---------------------------------------------------------------------------
+
 
 def test_phone_rejects_empty():
     assert validate_phone("") is False
@@ -75,6 +77,7 @@ def test_email_rejects_empty():
 # Phone — E.164-shaped strings pass; everything else returns False.
 # ---------------------------------------------------------------------------
 
+
 @settings(max_examples=200, deadline=None)
 @given(st.text(min_size=1, max_size=64))
 def test_phone_never_crashes(s: str) -> None:
@@ -88,8 +91,7 @@ def test_phone_never_crashes(s: str) -> None:
     # E.164 numbers: optional +, 7..15 digits.
     st.one_of(
         st.from_regex(r"\+?[0-9]{7,15}", fullmatch=True),
-        st.text(alphabet="0123456789", min_size=7, max_size=15)
-            .map(lambda d: "+" + d),
+        st.text(alphabet="0123456789", min_size=7, max_size=15).map(lambda d: "+" + d),
     )
 )
 def test_phone_accepts_e164_shapes(phone: str) -> None:
@@ -114,6 +116,7 @@ def test_phone_rejects_non_digit_input(s: str) -> None:
 # Email — sanity of the regex; never crash, reject obvious garbage.
 # ---------------------------------------------------------------------------
 
+
 @settings(max_examples=200, deadline=None)
 @given(st.text(min_size=1, max_size=128))
 def test_email_never_crashes(s: str) -> None:
@@ -134,8 +137,6 @@ def test_email_accepts_canonical_shapes(addr: str) -> None:
 
 
 @settings(max_examples=200, deadline=None)
-@given(
-    st.text(alphabet="><()[]{}|\\`~!#$%^&*", min_size=1, max_size=32)
-)
+@given(st.text(alphabet="><()[]{}|\\`~!#$%^&*", min_size=1, max_size=32))
 def test_email_rejects_punctuation_only_garbage(s: str) -> None:
     assert validate_email(s) is False

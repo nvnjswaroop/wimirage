@@ -4,11 +4,10 @@ This wraps ``iwconfig`` / ``airmon-ng`` so the rest of the codebase can talk
 to a constant API. All subprocess failures are caught and logged.
 """
 
-import subprocess
+import logging
 import os
 import re
-import logging
-from typing import Optional
+import subprocess
 
 logger = logging.getLogger("wimirage")
 
@@ -28,7 +27,10 @@ class MonitorMode:
         interfaces: list[str] = []
         try:
             result = subprocess.run(
-                ["iwconfig"], capture_output=True, text=True, timeout=10,
+                ["iwconfig"],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             for line in result.stdout.split("\n"):
                 # Leading whitespace is normal — `iwconfig` emits indent-before-name.
@@ -42,9 +44,7 @@ class MonitorMode:
             logger.error("iwconfig timed out.")
             return interfaces
         except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as e:
-            logger.error(
-                f"Error getting wireless interfaces: {type(e).__name__}: {e}"
-            )
+            logger.error(f"Error getting wireless interfaces: {type(e).__name__}: {e}")
             return interfaces
 
     @staticmethod
@@ -53,7 +53,9 @@ class MonitorMode:
         try:
             result = subprocess.run(
                 ["ip", "link", "show"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             interfaces = []
             for line in result.stdout.split("\n"):
@@ -79,7 +81,9 @@ class MonitorMode:
         try:
             result = subprocess.run(
                 ["iwconfig", interface],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             return "Mode:Monitor" in result.stdout
         except FileNotFoundError:
@@ -96,7 +100,7 @@ class MonitorMode:
         return os.path.exists(f"/sys/class/net/{interface}")
 
     @staticmethod
-    def enable_monitor(interface: str) -> Optional[str]:
+    def enable_monitor(interface: str) -> str | None:
         """Put ``interface`` into monitor mode.
 
         Strategy:
@@ -118,7 +122,9 @@ class MonitorMode:
         try:
             subprocess.run(
                 ["airmon-ng", "check", "kill"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
             )
         except (FileNotFoundError, subprocess.TimeoutExpired):
             pass
@@ -128,15 +134,21 @@ class MonitorMode:
         try:
             subprocess.run(
                 ["ip", "link", "set", interface, "down"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
             )
             subprocess.run(
                 ["iwconfig", interface, "mode", "monitor"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
             )
             subprocess.run(
                 ["ip", "link", "set", interface, "up"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
             )
         except FileNotFoundError as e:
             logger.error(f"Required tool not found: {e}")
@@ -154,7 +166,9 @@ class MonitorMode:
         try:
             subprocess.run(
                 ["airmon-ng", "start", interface],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
             )
             mon_interfaces = MonitorMode.get_wireless_interfaces()
             for iface in mon_interfaces:
@@ -187,7 +201,9 @@ class MonitorMode:
             try:
                 subprocess.run(
                     ["airmon-ng", "stop", interface],
-                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=15,
                 )
                 return True
             except (OSError, subprocess.SubprocessError, UnicodeDecodeError) as e:
@@ -197,15 +213,21 @@ class MonitorMode:
         try:
             subprocess.run(
                 ["ip", "link", "set", interface, "down"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
             )
             subprocess.run(
                 ["iwconfig", interface, "mode", "managed"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
             )
             subprocess.run(
                 ["ip", "link", "set", interface, "up"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
             )
         except FileNotFoundError as e:
             logger.error(f"Required tool not found: {e}")
@@ -233,7 +255,9 @@ class MonitorMode:
         try:
             subprocess.run(
                 ["iwconfig", interface, "channel", str(channel)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
             )
             return True
         except (FileNotFoundError, subprocess.TimeoutExpired):

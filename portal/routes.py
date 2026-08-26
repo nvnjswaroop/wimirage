@@ -4,24 +4,28 @@ The Blueprint is parameterised via :func:`build_portal_blueprint` so we can
 dependency-inject the OTP service, network config, event bus, and logger.
 """
 
-import secrets
 import logging
+import secrets
 import threading
 
 from flask import (
-    Blueprint, render_template, request, session,
+    Blueprint,
+    render_template,
+    request,
+    session,
 )
 
-from core.otp_service import OTPServiceInterface, OTPBackendError, VALID_COUNTRY_CODES
-from core.network import NetworkConfig
 from core.events import EventBus
 from core.models import AppConfig
-from utils.logger import CredentialLogger
+from core.network import NetworkConfig
+from core.otp_service import VALID_COUNTRY_CODES, OTPBackendError, OTPServiceInterface
+
 # Security fix S-5: scrub PII (phone / email) out of log lines so a shared
 # rotating-file audit log never carries capturable data. The helper already
 # exists in `portal.security`; route-side logs use the same phone/email
 # masking rules the admin endpoints use.
 from portal.security import scrub_for_log
+from utils.logger import CredentialLogger
 
 logger = logging.getLogger("wimirage")
 
@@ -44,7 +48,7 @@ def build_portal_blueprint(
     """
     # Lazy import to break the circular dep between core.captive_portal
     # and portal.routes. (Section 1 / Section 2 stand-alone concern.)
-    from core.captive_portal import rate_limit, validate_phone, validate_email
+    from core.captive_portal import rate_limit, validate_email, validate_phone
 
     bp = Blueprint("portal", __name__)
 
@@ -100,14 +104,14 @@ def build_portal_blueprint(
                 # raw OTP to the shared rotating audit log — the log collector
                 # must not become an OTP oracle. Demo mode surfaces the OTP
                 # through its own channel (DemoOTPService.generate_otp).
-                logger.info("OTP dispatched: phone=%s",
-                            scrub_for_log(full_phone))
+                logger.info("OTP dispatched: phone=%s", scrub_for_log(full_phone))
             except (OTPBackendError, OSError) as e:
                 logger.error(f"OTP send failed: {type(e).__name__}: {e}")
         else:
             # Same PII boundary as above — never write the raw phone to logs.
-            logger.info("No OTP service configured; OTP would be sent to %s",
-                        scrub_for_log(full_phone))
+            logger.info(
+                "No OTP service configured; OTP would be sent to %s", scrub_for_log(full_phone)
+            )
 
         session["phone"] = full_phone
         session["email"] = email
@@ -126,8 +130,7 @@ def build_portal_blueprint(
         session_token = session.get("csrf_token", "")
         if not form_token or form_token != session_token:
             return render_template(
-                "otp.html", phone="", email="",
-                error="Invalid security token.", csrf_token=""
+                "otp.html", phone="", email="", error="Invalid security token.", csrf_token=""
             ), 403
 
         # (Section 3) Strict: do NOT let the request form override the
@@ -144,9 +147,11 @@ def build_portal_blueprint(
         otp_input_raw = request.form.get("otp", "")
         if not isinstance(otp_input_raw, str) or not (1 <= len(otp_input_raw) <= 12):
             return render_template(
-                "otp.html", phone=session.get("phone", ""),
+                "otp.html",
+                phone=session.get("phone", ""),
                 email=session.get("email", ""),
-                error="Invalid OTP format.", csrf_token=form_token,
+                error="Invalid OTP format.",
+                csrf_token=form_token,
             ), 400
         # OTP is digits only — strip them for the comparison. Anything
         # else is junk; if the result is empty (e.g. user submitted pure
@@ -155,9 +160,11 @@ def build_portal_blueprint(
         otp_input = "".join(c for c in otp_input_raw if c.isdigit())
         if not otp_input:
             return render_template(
-                "otp.html", phone=session.get("phone", ""),
+                "otp.html",
+                phone=session.get("phone", ""),
                 email=session.get("email", ""),
-                error="Invalid OTP format. Digits only.", csrf_token=form_token,
+                error="Invalid OTP format. Digits only.",
+                csrf_token=form_token,
             ), 400
         phone = session.get("phone", "")
         email = session.get("email", "")
@@ -180,8 +187,7 @@ def build_portal_blueprint(
             # trail never holds the captured pair in cleartext. Phone
             # becomes "+91*****3210", email becomes "t****@example.com"
             # (or "[EMAIL]" / "[PHONE]" if the helper's regex hits first).
-            logger.info("VERIFIED! phone=%s email=%s",
-                        scrub_for_log(phone), scrub_for_log(email))
+            logger.info("VERIFIED! phone=%s email=%s", scrub_for_log(phone), scrub_for_log(email))
 
             grant_result_box: dict[str, bool] = {}
 
@@ -201,6 +207,7 @@ def build_portal_blueprint(
                 # it overruns, the client will hit the portal on first
                 # HTTP and the rule will be in place by then.
                 import time as _time
+
                 deadline = _time.monotonic() + 0.25
                 while _time.monotonic() < deadline and "ok" not in grant_result_box:
                     _time.sleep(0.01)
@@ -212,7 +219,9 @@ def build_portal_blueprint(
                     csrf_token = secrets.token_hex(16)
                     session["csrf_token"] = csrf_token
                     return render_template(
-                        "otp.html", phone=phone, email=email,
+                        "otp.html",
+                        phone=phone,
+                        email=email,
                         error=(
                             "Network policy update failed. Please retry or "
                             "contact the network administrator."
@@ -250,8 +259,11 @@ def build_portal_blueprint(
         csrf_token = secrets.token_hex(16)
         session["csrf_token"] = csrf_token
         return render_template(
-            "otp.html", phone=phone, email=email,
-            error="Invalid OTP. Please try again.", csrf_token=csrf_token,
+            "otp.html",
+            phone=phone,
+            email=email,
+            error="Invalid OTP. Please try again.",
+            csrf_token=csrf_token,
         )
 
     @bp.route("/resend", methods=["POST"])
@@ -261,8 +273,7 @@ def build_portal_blueprint(
         session_token = session.get("csrf_token", "")
         if not form_token or form_token != session_token:
             return render_template(
-                "otp.html", phone="", email="",
-                error="Invalid security token.", csrf_token=""
+                "otp.html", phone="", email="", error="Invalid security token.", csrf_token=""
             ), 403
 
         # (Section 3) Same source-of-truth rule as /verify: phone/email come
@@ -281,16 +292,18 @@ def build_portal_blueprint(
                 otp_service.send_otp(phone, otp)
                 # PII-safe + secret-safe — same rule as /submit: never write
                 # the raw OTP to the shared audit log.
-                logger.info("OTP resent: phone=%s",
-                            scrub_for_log(phone))
+                logger.info("OTP resent: phone=%s", scrub_for_log(phone))
             except (OTPBackendError, OSError) as e:
                 logger.error(f"OTP resend failed: {type(e).__name__}: {e}")
 
         csrf_token = secrets.token_hex(16)
         session["csrf_token"] = csrf_token
         return render_template(
-            "otp.html", phone=phone, email=email,
-            resent=True, csrf_token=csrf_token,
+            "otp.html",
+            phone=phone,
+            email=email,
+            resent=True,
+            csrf_token=csrf_token,
         )
 
     return bp

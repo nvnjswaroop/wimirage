@@ -1,12 +1,12 @@
 import os
 import re
 import sys
+
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from core.models import AppConfig, AccessPoint, Credential
-
+from core.models import AccessPoint, AppConfig, Credential
 
 # Section 7 #3 — strip ANSI escape sequences from capsys output so test
 # assertions are colour-blind.
@@ -16,8 +16,10 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*[mGKHJ]")
 @pytest.fixture
 def strip_ansi():
     """Return ``capsys.readouterr().out`` with ANSI codes removed."""
+
     def _strip(text: str) -> str:
         return _ANSI_RE.sub("", text)
+
     return _strip
 
 
@@ -52,7 +54,7 @@ def sample_ap():
         channel=6,
         signal=-45,
         encryption="WPA2",
-        clients=["11:22:33:44:55:66"]
+        clients=["11:22:33:44:55:66"],
     )
 
 
@@ -64,5 +66,5 @@ def sample_credential():
         phone="+919876543210",
         email="test@example.com",
         otp=None,
-        stage="otp_verified"
+        stage="otp_verified",
     )

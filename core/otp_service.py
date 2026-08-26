@@ -39,10 +39,12 @@ class OTPBackendError(RuntimeError):
     contract instead of hard-coding vendor SDK exception types.
     """
 
+
 # Twilio is an optional dependency. Import lazily so the rest of the module
 # remains usable when twilio isn't installed (Section 8 #10).
 try:
     from twilio.rest import Client as _TwilioClient
+
     _TWILIO_IMPORT_ERROR: Exception | None = None
 except Exception as _exc:  # pragma: no cover - exercised when twilio missing
     _TwilioClient = None
@@ -153,7 +155,10 @@ class BaseOTPService(OTPServiceInterface):
             logger.warning(f"Account locked for {remaining}s. Too many failed attempts.")
             return False
 
-        if attempts.get("locked_at") and time.time() - attempts["locked_at"] >= self.lockout_seconds:
+        if (
+            attempts.get("locked_at")
+            and time.time() - attempts["locked_at"] >= self.lockout_seconds
+        ):
             self._attempt_counts[phone] = {"count": 0, "locked_at": None}
 
         stored = self._otp_store[phone]
@@ -177,8 +182,7 @@ class BaseOTPService(OTPServiceInterface):
         else:
             # Legacy unsalted path — pre-2.0 verifier. Logged for awareness.
             logger.warning(
-                "Verifying legacy unsalted OTP entry for %s; "
-                "regenerate OTPs to migrate.", phone
+                "Verifying legacy unsalted OTP entry for %s; regenerate OTPs to migrate.", phone
             )
             input_hash = hashlib.sha256(otp_input.encode()).hexdigest()
             constructed = input_hash
@@ -208,7 +212,8 @@ class BaseOTPService(OTPServiceInterface):
         attempts = self._attempt_counts.get(phone)
         if not attempts or not attempts.get("locked_at"):
             return False
-        return time.time() - attempts["locked_at"] < self.lockout_seconds
+        locked_at = attempts["locked_at"]
+        return bool(time.time() - locked_at < self.lockout_seconds)
 
     def send_otp(self, phone: str, otp: str) -> None:
         """Stub delivery — :class:`BaseOTPService` itself doesn't ship messages.
@@ -249,11 +254,16 @@ class TwilioOTPService(BaseOTPService):
         lockout_seconds: See :class:`BaseOTPService`.
     """
 
-    def __init__(self, account_sid: str, auth_token: str, from_phone: str,
-                 otp_length: int = BaseOTPService.DEFAULT_LENGTH,
-                 expiry_seconds: int = BaseOTPService.DEFAULT_EXPIRY,
-                 max_attempts: int = BaseOTPService.DEFAULT_MAX_ATTEMPTS,
-                 lockout_seconds: int = BaseOTPService.DEFAULT_LOCKOUT) -> None:
+    def __init__(
+        self,
+        account_sid: str,
+        auth_token: str,
+        from_phone: str,
+        otp_length: int = BaseOTPService.DEFAULT_LENGTH,
+        expiry_seconds: int = BaseOTPService.DEFAULT_EXPIRY,
+        max_attempts: int = BaseOTPService.DEFAULT_MAX_ATTEMPTS,
+        lockout_seconds: int = BaseOTPService.DEFAULT_LOCKOUT,
+    ) -> None:
         super().__init__(otp_length, expiry_seconds, max_attempts, lockout_seconds)
         self.account_sid = account_sid
         self.auth_token = auth_token
@@ -293,6 +303,24 @@ class TwilioOTPService(BaseOTPService):
 
 
 VALID_COUNTRY_CODES = [
-    "+91", "+1", "+44", "+61", "+81", "+49", "+33", "+86", "+971", "+65",
-    "+92", "+880", "+94", "+977", "+974", "+968", "+966", "+20", "+27", "+234",
+    "+91",
+    "+1",
+    "+44",
+    "+61",
+    "+81",
+    "+49",
+    "+33",
+    "+86",
+    "+971",
+    "+65",
+    "+92",
+    "+880",
+    "+94",
+    "+977",
+    "+974",
+    "+968",
+    "+966",
+    "+20",
+    "+27",
+    "+234",
 ]

@@ -1,5 +1,5 @@
 import subprocess
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from utils.monitor_mode import MonitorMode
 
@@ -7,7 +7,9 @@ from utils.monitor_mode import MonitorMode
 class TestMonitorModeGetWirelessInterfaces:
     @patch("subprocess.run")
     def test_finds_interfaces_from_iwconfig(self, mock_run):
-        mock_run.return_value = MagicMock(stdout="  wlan0     IEEE 802.11  Mode:Monitor\n  wlan1     IEEE 802.11  Mode:Managed\n")
+        mock_run.return_value = MagicMock(
+            stdout="  wlan0     IEEE 802.11  Mode:Monitor\n  wlan1     IEEE 802.11  Mode:Managed\n"
+        )
         interfaces = MonitorMode.get_wireless_interfaces()
         assert "wlan0" in interfaces
         assert "wlan1" in interfaces
@@ -22,7 +24,9 @@ class TestMonitorModeGetWirelessInterfaces:
         with patch("subprocess.run") as mock_ip:
             mock_ip.side_effect = [
                 FileNotFoundError("iwconfig"),
-                MagicMock(stdout="1: wlan0: <BROADCAST,MULTICAST> ...\n2: eth0: <BROADCAST> ...\n3: wlan1: <BROADCAST> ...\n"),
+                MagicMock(
+                    stdout="1: wlan0: <BROADCAST,MULTICAST> ...\n2: eth0: <BROADCAST> ...\n3: wlan1: <BROADCAST> ...\n"
+                ),
             ]
             interfaces = MonitorMode.get_wireless_interfaces()
             assert "wlan0" in interfaces or "wlan1" in interfaces
@@ -41,7 +45,9 @@ class TestMonitorModeGetWirelessInterfaces:
         with patch("subprocess.run") as mock_ip:
             mock_ip.side_effect = [
                 FileNotFoundError("iwconfig"),
-                MagicMock(stdout="1: wlan0: <BROADCAST> ...\n2: eth0: <BROADCAST> ...\n3: docker0: <BROADCAST> ...\n4: wlan1mon: <BROADCAST> ...\n"),
+                MagicMock(
+                    stdout="1: wlan0: <BROADCAST> ...\n2: eth0: <BROADCAST> ...\n3: docker0: <BROADCAST> ...\n4: wlan1mon: <BROADCAST> ...\n"
+                ),
             ]
             interfaces = MonitorMode.get_wireless_interfaces()
             assert "wlan0" in interfaces
@@ -116,7 +122,9 @@ class TestMonitorModeEnableMonitor:
     def test_handles_airmon_ng_fallback(self, mock_run, mock_exists):
         mock_exists.return_value = True
         mock_run.side_effect = [None, None, None, None, Exception("iwconfig failed")]
-        with patch(_qualify("MonitorMode.get_wireless_interfaces"), return_value=["wlan0", "wlan0mon"]):
+        with patch(
+            _qualify("MonitorMode.get_wireless_interfaces"), return_value=["wlan0", "wlan0mon"]
+        ):
             with patch(_qualify("MonitorMode.is_monitor_mode"), return_value=True):
                 # When iwconfig-branch fails, airmon-ng runs and creates
                 # ``wlan0mon`` -- the function picks it up via the

@@ -10,6 +10,7 @@ Covers:
 """
 
 import logging
+
 import pytest
 
 from core.models import AccessPoint, AppConfig, AttackState

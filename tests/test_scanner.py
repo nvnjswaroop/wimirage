@@ -1,4 +1,5 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from core.models import AccessPoint
 from core.scanner import BPF_FILTER, ScanResult
 
@@ -7,6 +8,7 @@ class TestAPScanner:
     def test_init_defaults(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0", timeout=20)
             assert scanner.interface == "wlan0"
             assert scanner.timeout == 20
@@ -16,6 +18,7 @@ class TestAPScanner:
     def test_bpf_filter_set(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
             # BPF_FILTER is a module-level constant (Section 5 #7).
             assert BPF_FILTER is not None
@@ -27,12 +30,14 @@ class TestAPScanner:
     def test_get_sorted_aps_empty(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
             assert scanner.get_sorted_aps() == []
 
     def test_get_sorted_aps_by_signal(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
             ap1 = AccessPoint(ssid="A", bssid="AA:BB:CC:DD:EE:01", channel=1, signal=-70)
             ap2 = AccessPoint(ssid="B", bssid="AA:BB:CC:DD:EE:02", channel=6, signal=-40)
@@ -50,6 +55,7 @@ class TestAPScanner:
     def test_get_sorted_aps_none_signal_last(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
             ap1 = AccessPoint(ssid="A", bssid="AA:BB:CC:DD:EE:01", channel=1, signal=-40)
             ap2 = AccessPoint(ssid="B", bssid="AA:BB:CC:DD:EE:02", channel=6, signal=None)
@@ -63,8 +69,14 @@ class TestAPScanner:
     def test_get_clients_returns_clients(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
-            ap = AccessPoint(ssid="Test", bssid="AA:BB:CC:DD:EE:FF", channel=6, clients=["11:22:33:44:55:66", "77:88:99:AA:BB:CC"])
+            ap = AccessPoint(
+                ssid="Test",
+                bssid="AA:BB:CC:DD:EE:FF",
+                channel=6,
+                clients=["11:22:33:44:55:66", "77:88:99:AA:BB:CC"],
+            )
             scanner.ap_list["AA:BB:CC:DD:EE:FF"] = ap
             clients = scanner.get_clients("AA:BB:CC:DD:EE:FF")
             assert len(clients) == 2
@@ -73,12 +85,14 @@ class TestAPScanner:
     def test_get_clients_unknown_bssid(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
             assert scanner.get_clients("unknown:bssid") == []
 
     def test_select_ap_valid_index(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
             ap = AccessPoint(ssid="Test", bssid="AA:BB:CC:DD:EE:FF", channel=6)
             scanner.ap_list["AA:BB:CC:DD:EE:FF"] = ap
@@ -88,6 +102,7 @@ class TestAPScanner:
     def test_select_ap_invalid_index(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
             ap = AccessPoint(ssid="Test", bssid="AA:BB:CC:DD:EE:FF", channel=6)
             result = scanner.select_ap([ap], 99)
@@ -96,6 +111,7 @@ class TestAPScanner:
     def test_stop_sets_event(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
             assert scanner._stop_event.is_set() is False
             scanner.stop()
@@ -104,14 +120,23 @@ class TestAPScanner:
     def test_display_aps_returns_aps(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
-            ap = AccessPoint(ssid="Test", bssid="AA:BB:CC:DD:EE:FF", channel=6, signal=-50, encryption="WPA2", clients=[])
+            ap = AccessPoint(
+                ssid="Test",
+                bssid="AA:BB:CC:DD:EE:FF",
+                channel=6,
+                signal=-50,
+                encryption="WPA2",
+                clients=[],
+            )
             result = scanner.display_aps([ap])
             assert result == [ap]
 
     def test_display_aps_uses_sorted_when_none(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
             ap = AccessPoint(ssid="Test", bssid="AA:BB:CC:DD:EE:FF", channel=6)
             scanner.ap_list["AA:BB:CC:DD:EE:FF"] = ap
@@ -123,6 +148,7 @@ class TestAPScannerExtractHelpers:
     def test_extract_channel_from_elt(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
 
             mock_pkt = MagicMock()
@@ -140,6 +166,7 @@ class TestAPScannerExtractHelpers:
     def test_extract_channel_dsset_fallback(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
 
             mock_pkt = MagicMock()
@@ -152,6 +179,7 @@ class TestAPScannerExtractHelpers:
     def test_detect_encryption_wpa2(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
 
             mock_pkt = MagicMock()
@@ -168,6 +196,7 @@ class TestAPScannerExtractHelpers:
     def test_detect_encryption_wpa(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
 
             mock_pkt = MagicMock()
@@ -185,6 +214,7 @@ class TestAPScannerExtractHelpers:
     def test_detect_encryption_open(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
 
             mock_pkt = MagicMock()
@@ -197,6 +227,7 @@ class TestAPScannerExtractHelpers:
     def test_extract_signal(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
 
             mock_pkt = MagicMock()
@@ -212,6 +243,7 @@ class TestAPScannerExtractHelpers:
     def test_extract_signal_no_radiotap(self):
         with patch("core.scanner.sniff"):
             from core.scanner import APScanner
+
             scanner = APScanner("wlan0")
 
             mock_pkt = MagicMock()

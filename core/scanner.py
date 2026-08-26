@@ -5,11 +5,11 @@ encryption / signal / clients, surfaces a sorting/selector API, and
 hands the result back as a structured :class:`ScanResult`.
 """
 
+import logging
 import queue
 import struct
 import threading
 import time
-import logging
 from dataclasses import dataclass, field
 
 from scapy.layers.dot11 import Dot11, Dot11Beacon, Dot11Elt, RadioTap
@@ -25,6 +25,7 @@ __all__ = ["APScanner", "ScanResult"]
 @dataclass
 class ScanResult:
     """Structured result of a scan (Section 2 #7)."""
+
     aps: list[AccessPoint] = field(default_factory=list)
     duration: float = 0.0
     packet_count: int = 0
@@ -88,6 +89,7 @@ class APScanner:
     def _process_batch(self, batch: list) -> None:
         """Handle a batch of packets; iterates over BEACON + DATA frames."""
         from scapy.error import Scapy_Exception
+
         for pkt in batch:
             try:
                 if pkt.haslayer(Dot11Beacon):
@@ -155,7 +157,8 @@ class APScanner:
             elt = pkt.getlayer(Dot11Elt)
             while elt:
                 if elt.ID == 0:
-                    return elt.info.decode(errors="ignore")
+                    decoded: str = elt.info.decode(errors="ignore")
+                    return decoded
                 # IE list is a singly-linked chain via the .payload attribute.
                 elt = elt.payload if elt.payload else None
         except (AttributeError, TypeError, struct.error):
@@ -167,7 +170,8 @@ class APScanner:
         try:
             dsset = pkt.getlayer(Dot11Elt, ID=3)
             if dsset and dsset.info:
-                return dsset.info[0]
+                channel: int = dsset.info[0]
+                return channel
         except (AttributeError, TypeError, struct.error, IndexError):
             pass
         return 1
@@ -177,8 +181,9 @@ class APScanner:
         try:
             rt = pkt.getlayer(RadioTap)
             if rt and rt.dBm_AntSignal:
-                raw = rt.dBm_AntSignal
-                return -(256 - raw) if raw > 0 else raw
+                raw: int = rt.dBm_AntSignal
+                signal: int = -(256 - raw) if raw > 0 else raw
+                return signal
         except (AttributeError, TypeError, struct.error):
             pass
         return None
@@ -191,7 +196,7 @@ class APScanner:
                 if elt.ID == 48:
                     return "WPA2"  # RSN IE
                 if elt.ID == 221 and elt.info[:4] == b"\x00\x50\xf2\x01":
-                    return "WPA"   # Vendor-specific WPA IE
+                    return "WPA"  # Vendor-specific WPA IE
                 elt = elt.payload if elt.payload else None
         except (AttributeError, TypeError, struct.error, IndexError):
             pass
@@ -202,10 +207,7 @@ class APScanner:
         try:
             addr1 = pkt[Dot11].addr1
             addr2 = pkt[Dot11].addr2
-            bssid = (
-                addr2 if addr2 in self.ap_list
-                else (addr1 if addr1 in self.ap_list else None)
-            )
+            bssid = addr2 if addr2 in self.ap_list else (addr1 if addr1 in self.ap_list else None)
             if not bssid:
                 return
             client_mac = addr1 if addr2 == bssid else addr2
@@ -219,7 +221,8 @@ class APScanner:
         except (AttributeError, TypeError, KeyError) as e:
             logger.warning(
                 "Scanner data-frame handler dropped packet: %s: %s",
-                type(e).__name__, e,
+                type(e).__name__,
+                e,
             )
 
     # ------------------------------------------------------------------
@@ -237,16 +240,12 @@ class APScanner:
             self.ap_list = {}
             self._sorted_cache = None
         self._stop_event.clear()
-        self._pkt_queue = queue.Queue(maxsize=_PACKET_QUEUE_MAXSIZE)
+        self._pkt_queue: queue.Queue = queue.Queue(maxsize=_PACKET_QUEUE_MAXSIZE)
 
-        logger.info(
-            f"Scanning for access points on {self.interface} for {self.timeout} seconds..."
-        )
+        logger.info(f"Scanning for access points on {self.interface} for {self.timeout} seconds...")
 
         # Batched worker thread.
-        worker = threading.Thread(
-            target=self._beacon_worker, args=(self._pkt_queue,), daemon=True
-        )
+        worker = threading.Thread(target=self._beacon_worker, args=(self._pkt_queue,), daemon=True)
         worker.start()
 
         start = time.monotonic()
@@ -298,7 +297,9 @@ class APScanner:
             aps = self.get_sorted_aps()
 
         print("\n" + "=" * 100)
-        print(f"{'#':<5} {'SSID':<25} {'BSSID':<20} {'CH':<5} {'Signal':<10} {'Encryption':<12} {'Clients'}")
+        print(
+            f"{'#':<5} {'SSID':<25} {'BSSID':<20} {'CH':<5} {'Signal':<10} {'Encryption':<12} {'Clients'}"
+        )
         print("=" * 100)
 
         for idx, ap in enumerate(aps, 1):

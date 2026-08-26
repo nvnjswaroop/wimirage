@@ -25,9 +25,7 @@ class TestBanner:
                 continue  # control / whitespace
             if cp < 0xB0 or (0x2500 <= cp <= 0x259F):
                 continue  # Latin-1 printable, ASCII printable, block art
-            assert False, (
-                f"non-Latin char {ch!r} (U+{cp:04X}) found in BANNER"
-            )
+            assert False, f"non-Latin char {ch!r} (U+{cp:04X}) found in BANNER"
 
     def test_banner_includes_authorized_use_only(self):
         """Compliance guardrail: visible text signals legal scope."""
@@ -75,6 +73,7 @@ class TestConfigureLogging:
         log = _logging.configure_logging()
         # RotatingFileHandler is the only file handler in the stack
         from logging.handlers import RotatingFileHandler
+
         assert any(isinstance(h, RotatingFileHandler) for h in log.handlers)
 
 

