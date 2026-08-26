@@ -1,0 +1,189 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Weekly run so transitive CVEs get caught even when the codebase is quiet.
+    - cron: "0 6 * * 1"
+
+# Pip cache speeds up installs across runs while still hitting the registry.
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Test + coverage
+  # ---------------------------------------------------------------------------
+  test:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            hostapd dnsmasq aircrack-ng iw wireless-tools \
+            net-tools iptables iptables-persistent python3-venv \
+            > /dev/null 2>&1
+
+      - name: Install Python deps (dev requirements)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: "Run tests with coverage (Section 7 floor: 80%)"
+        run: |
+          pytest tests/ -v \
+            --cov=core --cov=utils --cov=portal \
+            --cov-fail-under=80 \
+            --cov-report=term-missing \
+            --cov-report=xml \
+            -m "not slow"
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+
+  # ---------------------------------------------------------------------------
+  # 2. Lint (ruff) + format-check
+  # ---------------------------------------------------------------------------
+  lint:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install ruff
+        run: pip install ruff>=0.3
+      - name: Ruff check
+        run: ruff check core/ utils/ portal/ main.py preflight.py
+      - name: Ruff format check
+        run: ruff format --check core/ utils/ portal/ main.py preflight.py
+
+  # ---------------------------------------------------------------------------
+  # 3. Type-check (mypy)
+  # ---------------------------------------------------------------------------
+  mypy:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install mypy and stubs
+        run: pip install mypy>=1.9 types-flask types-jinja2 scapy
+      - run: mypy core/ utils/ --ignore-missing-imports
+
+  # ---------------------------------------------------------------------------
+  # 4. Dependency vulnerability audit (Section 8 #7)
+  # ---------------------------------------------------------------------------
+  audit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install pip-audit
+        run: pip install pip-audit
+      - name: Run pip-audit (strict)
+        # --strict treats vulnerabilities as errors (i.e. CI fails).
+        run: pip-audit --strict
+
+  # ---------------------------------------------------------------------------
+  # 5. License compliance (Section 8 #8)
+  # ---------------------------------------------------------------------------
+  licenses:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install pip-licenses
+        run: pip install pip-licenses
+      # Fail the build if any dep has a non-OSI-approved license.
+      # The script only flags unknowns for triage (non-blocking).
+      - name: Verify only permissive licenses
+        run: |
+          pip-licenses --allow-only="MIT License;BSD License;BSD-3-Clause;BSD-2-Clause;Apache Software License;Apache 2.0;Apache-2.0;ISC License (ISCL);ISC;Mozilla Public License 2.0 (MPL 2.0);Python Software Foundation License;Python-2.0;GNU Lesser General Public License v3 (LGPLv3);GNU Library or Lesser General Public License (LGPL);GNU General Public License v3 (GPLv3);Historical Permission Notice and Disclaimer (HPND)"
+
+  # ---------------------------------------------------------------------------
+  # 7. Lockfile freshness (Section 8 #9). Only runs weekly — main reason it
+  #    exists is so the lockfile doesn't silently fall out of date with
+  #    pyproject.toml over months of inactivity.
+  # ---------------------------------------------------------------------------
+  lockfile-freshness:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install pip-tools
+        run: pip install pip-tools
+      - name: Regenerate lockfile
+        run: |
+          pip-compile --quiet --generate-hashes -o requirements.lock pyproject.toml
+      - name: Detect drift
+        run: |
+          if ! git diff --quiet requirements.lock; then
+            echo "::warning::requirements.lock is out of date with pyproject.toml"
+            git --no-pager diff requirements.lock | head -50
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 8. Mutation testing (Section 7 #7). Opt-in via schedule/manual dispatch so
+  #    it doesn't slow every PR.
+  # ---------------------------------------------------------------------------
+  mutation:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install mutmut
+      - name: Run mutmut on core/
+        run: |
+          mutmut run --paths-to-mutate=core/ 2>&1 | tee mutmut.log
+          mutmut results | tee mutmut_results.txt
+          # Don't fail the build — we surface the result for review.
+          true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutmut-results
+          path: |
+            mutmut.log
+            mutmut_results.txt
+

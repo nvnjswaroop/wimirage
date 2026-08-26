@@ -1,0 +1,42 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Test + lint caches
+.hypothesis/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Runtime artefacts that should never be committed
+logs/audit.log*
+logs/captured_credentials.jsonl
+config/hostapd.conf
+config/dnsmasq.conf
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Virtualenv
+venv/
+.venv/
+env/
+
+# Internal working notes (not part of the shipped project)
+for_u_testers.txt
+plan5goal5.md

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Free Wi-Fi - Verify Your Identity</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="wifi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                <circle cx="12" cy="20" r="1"/>
+            </svg>
+        </div>
+        <h1>Free Wi-Fi</h1>
+        <p class="subtitle">Verify your identity to connect</p>
+
+        {% if error %}
+        <div class="error-msg">{{ error }}</div>
+        {% endif %}
+
+        <form action="/submit" method="POST" id="loginForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+            <div class="input-group">
+                <label for="phone">Phone Number</label>
+                <div class="phone-row">
+                    <select name="country_code" id="country_code" class="country-select">
+                        <option value="+91">+91</option>
+                        <option value="+1">+1</option>
+                        <option value="+44">+44</option>
+                        <option value="+61">+61</option>
+                        <option value="+81">+81</option>
+                        <option value="+49">+49</option>
+                        <option value="+33">+33</option>
+                        <option value="+86">+86</option>
+                        <option value="+971">+971</option>
+                        <option value="+65">+65</option>
+                        <option value="+92">+92</option>
+                        <option value="+880">+880</option>
+                        <option value="+94">+94</option>
+                        <option value="+977">+977</option>
+                        <option value="+20">+20</option>
+                        <option value="+27">+27</option>
+                    </select>
+                    <input type="tel" name="phone" id="phone" placeholder="Enter phone number" required pattern="[0-9]{7,15}">
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="email">Email Address</label>
+                <input type="email" name="email" id="email" placeholder="Enter your email" required>
+            </div>
+
+            <button type="submit" class="btn-primary">Send OTP</button>
+
+            <p class="terms">By connecting, you agree to our <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a></p>
+        </form>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>

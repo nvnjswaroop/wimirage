@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify OTP</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <div class="wifi-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                <circle cx="12" cy="20" r="1"/>
+            </svg>
+        </div>
+        <h1>Verify OTP</h1>
+        <p class="subtitle">Enter the code sent to <strong>{{ phone }}</strong></p>
+
+        {% if error %}
+        <div class="error-msg">{{ error }}</div>
+        {% endif %}
+
+        {% if resent %}
+        <div class="success-msg">OTP has been resent to {{ phone }}</div>
+        {% endif %}
+
+        <form action="/verify" method="POST" id="otpForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="phone" value="{{ phone }}">
+            <input type="hidden" name="email" value="{{ email }}">
+
+            <div class="input-group">
+                <label for="otp">6-Digit OTP</label>
+                <div class="otp-inputs">
+                    <input type="text" maxlength="1" class="otp-box" data-index="0" inputmode="numeric" pattern="[0-9]" autofocus>
+                    <input type="text" maxlength="1" class="otp-box" data-index="1" inputmode="numeric" pattern="[0-9]">
+                    <input type="text" maxlength="1" class="otp-box" data-index="2" inputmode="numeric" pattern="[0-9]">
+                    <input type="text" maxlength="1" class="otp-box" data-index="3" inputmode="numeric" pattern="[0-9]">
+                    <input type="text" maxlength="1" class="otp-box" data-index="4" inputmode="numeric" pattern="[0-9]">
+                    <input type="text" maxlength="1" class="otp-box" data-index="5" inputmode="numeric" pattern="[0-9]">
+                </div>
+                <input type="hidden" name="otp" id="otpHidden">
+            </div>
+
+            <button type="submit" class="btn-primary">Verify & Connect</button>
+        </form>
+
+        <form action="/resend" method="POST" id="resendForm">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="phone" value="{{ phone }}">
+            <input type="hidden" name="email" value="{{ email }}">
+            <p class="resend-text">Didn't receive the code? <button type="submit" class="link-btn" id="resendBtn">Resend OTP</button></p>
+        </form>
+
+        <div class="timer" id="timer">OTP expires in <span id="countdown">5:00</span></div>
+    </div>
+    <script src="/static/script.js"></script>
+</body>
+</html>

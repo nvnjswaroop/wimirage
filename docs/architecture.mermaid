@@ -1,0 +1,271 @@
+# wimirage — Architecture
+
+A Mermaid.js rendering of the runtime topology for `wimirage` v2.x.
+Render with any Mermaid-compatible viewer (`mermaid-cli`, GitHub,
+Obsidian, mkdocs-material, etc.).
+
+---
+
+## 1. High-level runtime
+
+```mermaid
+flowchart LR
+    subgraph Operator
+        CLI[main.py menu loop]
+    end
+
+    subgraph "core/"
+        AC[AttackContext]
+        EB[EventBus]
+        PM[ProcessManager]
+        SC[APScanner]
+        DA[DeauthAttack]
+        RA[RogueAP]
+        NC[NetworkConfig]
+        CP[CaptivePortal]
+        OTP[OTPServiceInterface<br/><i>Demo / Twilio</i>]
+    end
+
+    subgraph "utils/"
+        MM[MonitorMode]
+        CL[CredentialLogger]
+        CU[Cleanup]
+        RETRY[@retry decorator]
+    end
+
+    subgraph "portal/"
+        BP[Flask Blueprint<br/>routes.py]
+        T[(templates/)]
+        S[(static/)]
+    end
+
+    subgraph "host OS"
+        HOSTAPD[hostapd]
+        DNSMASQ[dnsmasq]
+        IPT[iptables]
+        SCAPY[scapy sniff/sendp]
+        FS[(logs/*.jsonl<br/>logs/audit.log)]
+    end
+
+    CLI -->|owns| AC
+    AC --> SC & DA & RA & NC & CP & EB & PM
+    CP -->|mounts| BP
+    BP -->|reads| T & S
+    CP --> OTP
+
+    SC --> SCAPY
+    DA --> SCAPY
+    RA --> PM
+    PM --> HOSTAPD & DNSMASQ
+    RA --> HOSTAPD
+    NC --> IPT
+
+    CL --> FS
+    CL -.->|Fernet optional| FS
+    EB --> CP
+
+    DA -.uses.-> RF[perf_counter<br/>drift-free PPS]
+    SC -.uses.-> BATCH[queue.Queue<br/>+ batch worker]
+    CL -.uses.-> BF[batched JSONL flush]
+    CU -.uses.-> RETRY
+    CU -.installs.-> SIG[SIGINT/SIGTERM handler]
+```
+
+---
+
+## 2. State machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE
+
+    IDLE --> SCANNING
+    SCANNING --> SCANNED
+    SCANNING --> IDLE
+
+    SCANNED --> TARGET_SELECTED
+    SCANNED --> SCANNING
+
+    TARGET_SELECTED --> DEAUTH_RUNNING
+    TARGET_SELECTED --> SCANNING
+
+    DEAUTH_RUNNING --> AP_RUNNING
+    DEAUTH_RUNNING --> TARGET_SELECTED
+
+    AP_RUNNING --> PORTAL_RUNNING
+    AP_RUNNING --> DEAUTH_RUNNING
+
+    PORTAL_RUNNING --> IDLE
+    FULL_ATTACK --> IDLE
+    FULL_ATTACK --> PORTAL_RUNNING
+
+    note right of FULL_ATTACK
+        Menu option 7 — end-to-end chain.
+        Transitions to PORTAL_RUNNING
+        when the user stops the deauth
+        or the OTP alone mode is entered.
+    end note
+
+    IDLE --> [*]
+```
+
+---
+
+## 3. Full attack chain (data flow)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant O as Operator
+    participant M as main.py / MenuHandler
+    participant S as Scanner
+    participant D as DeauthAttack
+    participant R as RogueAP
+    participant N as NetworkConfig
+    participant P as CaptivePortal
+    participant V as Victim
+    participant O2 as OTPService
+
+    O->>M: menu option 7 — full attack chain
+    M->>S: enable_monitor + sniff (20s)
+    S-->>M: list[AccessPoint]
+    O->>M: pick target AP
+    M->>D: start(target_bssid, channel)
+    D-->>M: background thread @ PPS
+
+    M->>R: start(ssid, channel)
+    R-->>M: hostapd + dnsmasq up
+
+    M->>N: setup_iptables()<br/>(NAT + redirect :80/53)
+    N-->>M: OK
+
+    M->>P: start()
+    P-->>M: serving on :80
+
+    loop victim flow
+        V->>P: connect to SSID, GET /
+        P-->>V: login.html (csrf_token)
+        V->>P: POST /submit (csrf, phone, email)
+        P->>O2: generate_otp + send_otp
+        O2-->>V: SMS or demo print
+        V->>P: POST /verify (otp)
+        P-->>V: success.html (if valid)
+        P->>N: grant_internet(client_ip)
+    end
+
+    O->>M: Ctrl+C
+    M->>P: stop()
+    M->>R: stop() (hostapd, dnsmasq)
+    M->>D: stop()
+    M->>N: cleanup() (flush iptables, disable forwarding)
+    M->>S: enable_monitor(None)
+```
+
+---
+
+## 4. Module boundaries
+
+```mermaid
+flowchart TB
+    subgraph "core/ (domain)"
+        direction TB
+        M[models.py<br/>dataclasses + enums]
+        E[events.py]
+        PM2[process_manager.py]
+        SC2[scanner.py]
+        DE[deauth.py]
+        RA2[rogue_ap.py]
+        NE[network.py]
+        CP2[captive_portal.py]
+        OT2[otp_service.py]
+    end
+
+    subgraph "utils/ (adapters)"
+        direction TB
+        U1[monitor_mode.py]
+        U2[logger.py]
+        U3[cleanup.py]
+    end
+
+    subgraph "portal/ (HTTP layer)"
+        direction TB
+        R1[routes.py<br/>build_portal_blueprint]
+        R2[templates/*.html]
+        R3[static/*.{js,css}]
+    end
+
+    CP2 -.lazy import.-> R1
+    R1 --> CP2
+    R1 --> R2
+    R1 --> R3
+
+    RA2 --> PM2
+    NE --> U3
+    OT2 --> U2
+    DE --> SCAPY2[scapy]
+    SC2 --> SCAPY2
+    U3 -.->|SIGINT/SIGTERM| NE
+```
+
+### Boundary rules
+
+- **`core/` ↛ `utils/`.** A small number of `utils.cleanup` functions are
+  called from `core.network` (`flush_iptables`). All other `core`
+  modules must not import from `utils/`.
+- **`portal/routes.py` not importable from `core/`.** The lazy import
+  inside `build_portal_blueprint()` is the contract — do not move it
+  to the module top.
+- **`utils/` ↛ `core/`** when there's an obvious lower-level alternative.
+  For instance, `Cleanup` calls the standalone `flush_iptables()`
+  helper in `core/network.py`, not `NetworkConfig.flush_iptables()`
+  (which would create state). Subprocess-layer adapters in `utils/`
+  should reach for the lowest-level primitive they can.
+
+---
+
+## 5. Credential log pipeline
+
+```mermaid
+flowchart LR
+    A[Portal route<br/>/submit /verify /resend]
+    -->|log_credential| Q[threading Queue]
+    -->|drain every 5s OR 10 entries| W[_flush_worker]
+    -->|append + fsync| J[(captured_credentials.jsonl)]
+    -->|Fernet optional| J
+
+    L[RotatingFileHandler<br/>audit.log]
+    -->|logger.critical/info/error| RH[10MB x 5 backups]
+
+    classDef hot fill:#fdd,stroke:#900
+    classDef store fill:#dfd,stroke:#070
+    class A,Q hot
+    class J,RH store
+```
+
+---
+
+## 6. Plugin system (planned)
+
+```mermaid
+flowchart LR
+    A[core.plugins<br/>registry.py]
+    -->|scans entry points| EP[importlib.metadata.EntryPoint]
+    EP --> PS[scanner plugins]
+    EP --> PD[deauth plugins]
+    EP --> PR[rogue_ap plugins]
+    EP --> PO[otp plugins]
+
+    SC[APScanner] --> A
+    DA[DeauthAttack] --> A
+    RA[RogueAP] --> A
+    OT[OTPServiceInterface] --> A
+```
+
+Plugins let third parties swap a single attack-stage implementation
+without forking the main project. Currently this is a sketch in
+`plan5goal5.md` Section 2 #9 — code pending.
+
+---
+
+_Rendered mermaid: ``mermaid -i docs/architecture.mermaid -o out.svg``,
+or simply rely on GitHub's built-in viewer._

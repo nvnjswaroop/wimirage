@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!--
+      Section 3 redo: avoid inline JS so the CSP ("script-src 'self'") at
+      captive_portal.SECURITY_HEADERS is honoured by every browser. The
+      target URL is rendered server-side from AppConfig.success_redirect_url
+      and defaults to a no-op (".") so we never leak the victim IP/UA to a
+      third-party (e.g. previously hardcoded www.google.com).
+    -->
+    <meta http-equiv="refresh" content="3;url={{ success_redirect_url }}">
+    <title>Connected!</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container success-container">
+        <div class="check-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 12l3 3 5-5"/>
+            </svg>
+        </div>
+        <h1>Connected!</h1>
+        <p class="subtitle">Authentication successful. You are now connected to the internet.</p>
+        <div class="loading-bar">
+            <div class="loading-fill"></div>
+        </div>
+        <p class="redirect-text">Redirecting you shortly...</p>
+    </div>
+</body>
+</html>
