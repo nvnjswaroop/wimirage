@@ -99,7 +99,8 @@ class CredentialLogger:
                 "Install with: pip install cryptography"
             ) from None
         try:
-            return Fernet(self.encryption_key).encrypt(value.encode()).decode()
+            encrypted: bytes = Fernet(self.encryption_key).encrypt(value.encode())
+            return encrypted.decode()
         except (ValueError, TypeError, RuntimeError) as e:
             # Fernet raises InvalidToken on bad key length and
             # cryptography raises ValueError for malformed PEM. Fail

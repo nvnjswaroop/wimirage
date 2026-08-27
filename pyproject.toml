@@ -39,7 +39,7 @@ dev = [
     "pytest-mock>=3.12.0,<4.0",
     "ruff>=0.3.0,<0.5.0",
     "mypy>=1.9.0,<2.0",
-    "types-flask>=3.0.0",
+    "types-flask>=1.1.0",
     "types-jinja2>=2.11.0",
 ]
 all = [
