@@ -227,15 +227,16 @@ class TestB2RegressionSuccessHtmlSafe:
     def test_success_html_has_meta_refresh(self):
         from pathlib import Path
 
-        html = Path(
-            "C:/Users/JYOTHI/OneDrive/Desktop/Wifi-project/portal/templates/success.html"
-        ).read_text(encoding="utf-8")
-        assert '<meta http-equiv="refresh"' in html, (
+        # Resolve via PORTAL_TEMPLATES_DIR (project-relative), never a
+        # hardcoded developer-machine path — CI runs on Linux, not under C:/.
+        from core.paths import PORTAL_TEMPLATES_DIR
+
+        text = (Path(PORTAL_TEMPLATES_DIR) / "success.html").read_text(encoding="utf-8")
+        assert '<meta http-equiv="refresh"' in text, (
             'B2 regressed: success.html must use <meta http-equiv="refresh"> '
             "so the CSP (script-src 'self') is honoured."
         )
-        # Must use the template parameter, not a hardcoded URL.
-        assert "success_redirect_url" in html, (
+        assert "success_redirect_url" in text, (
             "B2 regressed: success.html must read its redirect target from "
             "{{ success_redirect_url }} rather than a hardcoded host."
         )
@@ -244,23 +245,16 @@ class TestB2RegressionSuccessHtmlSafe:
         import re
         from pathlib import Path
 
-        raw = Path(
-            "C:/Users/JYOTHI/OneDrive/Desktop/Wifi-project/portal/templates/success.html"
-        ).read_text(encoding="utf-8")
-        # Strip HTML comments so doc-notes mentioning the bug we're
-        # closing don't false-flag the regression check.
+        from core.paths import PORTAL_TEMPLATES_DIR
+
+        raw = (Path(PORTAL_TEMPLATES_DIR) / "success.html").read_text(encoding="utf-8")
         html = re.sub(r"<!--.*?-->", "", raw, flags=re.DOTALL)
         assert "setTimeout" not in html, "B2 regressed: inline setTimeout left behind"
-        # A bare inline <script>...</script> (no src=) is forbidden by our
-        # CSP (script-src 'self'). External <script src='...'> is allowed
-        # and lives in /static/script.js — we tolerate those.
         inline_script_blocks = re.findall(r"<script(?![^>]*\bsrc=)[^>]*>", html)
         assert not inline_script_blocks, (
             f"B2 regressed: inline <script> tag found ({inline_script_blocks!r}). "
             "External <script src='...'> is OK; inline JS violates the CSP."
         )
-        # Source-comment may still mention the old URL; only the rendered
-        # template is checked. That's covered by the route test below.
 
     def test_success_route_renders_safe_target_by_default(self, client, app_config: AppConfig):
         app_config.success_redirect_url = "."
